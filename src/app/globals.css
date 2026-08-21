@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   Estilos base premium "boda": dorado #D4AF37, tipografía serif Playfair.
+   ============================================================================ */
+:root {
+  --font-playfair: "Playfair Display", Georgia, serif;
+  --font-inter: "Inter", system-ui, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-cream text-ink font-sans antialiased;
+}
+
+/* ----------------------------- Componentes reutilizables ------------------- */
+@layer components {
+  .btn-primary {
+    @apply bg-gold-300 text-ink font-medium px-6 py-3 rounded-xl
+           hover:bg-gold-400 transition shadow-soft;
+  }
+  .btn-outline {
+    @apply border border-gold-300 text-ink px-6 py-3 rounded-xl
+           hover:bg-gold-50 transition;
+  }
+  .input {
+    @apply w-full px-4 py-3 rounded-xl border border-ink/15 bg-white
+           focus:outline-none focus:ring-2 focus:ring-gold-300 transition;
+  }
+  .card {
+    @apply bg-white rounded-2xl shadow-soft overflow-hidden;
+  }
+  .section-title {
+    @apply font-serif text-3xl md:text-4xl text-ink mb-2;
+  }
+  .text-gold {
+    @apply text-gold-300;
+  }
+}
+
+/* ----------------------------- Preloader fade ------------------------------ */
+.fade-enter {
+  opacity: 0;
+  transform: translateY(12px);
+}
+.fade-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}

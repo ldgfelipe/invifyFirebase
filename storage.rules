@@ -1,0 +1,31 @@
+rules_version = '2';
+
+// ============================================================================
+// REGLAS DE STORAGE - Invify
+// Clientes solo suben a su propia carpeta /users/{uid}/; plantillas en /templates/
+// son solo-escritura para admin.
+// ============================================================================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAdmin() {
+      return request.auth != null
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Imágenes de clientes: solo el dueño escribe bajo su uid.
+    match /users/{uid}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.size < 5 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Recursos de plantillas (solo admin).
+    match /templates/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

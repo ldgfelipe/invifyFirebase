@@ -1,0 +1,37 @@
+{
+  "name": "invify",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Invify - Plataforma SaaS de invitaciones digitales interactivas (Firebase + Next.js)",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "deploy": "firebase deploy",
+    "emulators": "firebase emulators:start"
+  },
+  "dependencies": {
+    "next": "14.2.5",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "firebase": "10.12.5",
+    "firebase-admin": "12.3.1",
+    "stripe": "14.25.0",
+    "framer-motion": "11.3.19",
+    "clsx": "2.1.1",
+    "tailwind-merge": "2.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.12",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0",
+    "autoprefixer": "10.4.19",
+    "eslint": "8.57.0",
+    "eslint-config-next": "14.2.5",
+    "postcss": "8.4.40",
+    "tailwindcss": "3.4.7",
+    "typescript": "5.5.4"
+  }
+}

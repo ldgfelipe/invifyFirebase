@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.firebase
+.env
+.env.local
+.env.*.local
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+*.log
+Dockerfile
+.dockerignore
+README.md

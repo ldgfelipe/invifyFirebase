@@ -1,0 +1,38 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "hosting": {
+    "public": ".well-known",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "**/.next/**"],
+    "rewrites": [
+      {
+        "source": "**",
+        "run": {
+          "serviceId": "invify",
+          "region": "us-central1"
+        }
+      }
+    ],
+    "headers": [
+      {
+        "source": "/i/**",
+        "headers": [
+          { "key": "Cache-Control", "value": "public, max-age=300, stale-while-revalidate=600" }
+        ]
+      }
+    ]
+  },
+  "emulators": {
+    "auth": { "port": 9099 },
+    "firestore": { "port": 8080 },
+    "functions": { "port": 5001 },
+    "storage": { "port": 9199 },
+    "hosting": { "port": 3000 },
+    "ui": { "enabled": true }
+  }
+}

@@ -1,0 +1,98 @@
+rules_version = '2';
+
+// ============================================================================
+// REGLAS DE SEGURIDAD FIRESTORE - Invify
+// Principio: negar por defecto. El cliente NUNCA lee colecciones completas;
+// todo el acceso a datos sensibles pasa por reglas estrictas de ownership.
+// ============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- Helpers reutilizables ----
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ---- /templates : catálogo público (solo lectura para invitados) ----
+    // Los invitados pueden ver plantillas activas; solo admin puede escribir.
+    match /templates/{templateId} {
+      allow read: if resource.data.active == true || isAdmin();
+      allow write: if isAdmin();
+      // Subcolección de demos no expuesta a clientes (se renderiza en servidor).
+      match /{document=**} {
+        allow read: if isAdmin();
+        allow write: if isAdmin();
+      }
+    }
+
+    // ---- /users : perfil del propio usuario ----
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      // Creación solo por el propio usuario autenticado (o admin).
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ---- /invitations : propiedad estricta por ownerUid ----
+    match /invitations/{invitationId} {
+      // Lectura pública de invitaciones publicadas (para /i/<slug>).
+      allow read: if resource.data.status == 'published' || isOwner(resource.data.ownerUid) || isAdmin();
+      // Creación: el usuario crea invitaciones con su propio uid (vía webhook/clonado).
+      allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
+      // Solo el dueño (o admin) edita/elimina su invitación.
+      allow update, delete: if isOwner(resource.data.ownerUid) || isAdmin();
+
+      // ---- /invitations/{id}/rsvps : escritura pública anónima, lectura solo dueño ----
+      match /rsvps/{rsvpId} {
+        // El formulario RSVP es público (sin login de invitado) pero validado.
+        allow create: if resource == null
+          && request.resource.data.keys().hasOnly(['nombre', 'email', 'personas', 'fecha', 'createdAt'])
+          && request.resource.data.nombre is string
+          && request.resource.data.nombre.size() > 0
+          && request.resource.data.nombre.size() <= 120
+          && request.resource.data.email is string
+          && request.resource.data.personas is int
+          && request.resource.data.personas >= 1
+          && request.resource.data.personas <= 20;
+        // Lectura/escritura solo dueño de la invitación.
+        allow read, update, delete: if isOwner(get(/databases/$(database)/documents/invitations/$(invitationId)).data.ownerUid) || isAdmin();
+      }
+
+      // ---- /invitations/{id}/quizResponses : escritura pública anónima ----
+      match /quizResponses/{quizId} {
+        allow create: if resource == null
+          && request.resource.data.keys().hasOnly(['fecha', 'datos', 'createdAt'])
+          && request.resource.data.datos is map;
+        allow read, update, delete: if isOwner(get(/databases/$(database)/documents/invitations/$(invitationId)).data.ownerUid) || isAdmin();
+      }
+    }
+
+    // ---- /plans : catálogo de planes (solo lectura) ----
+    match /plans/{planId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ---- /site : config del sitio (hero/SEO) editable solo por admin ----
+    match /site/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // ---- /orders : solo el dueño del pedido y admin ----
+    match /orders/{orderId} {
+      allow read: if isOwner(resource.data.uid) || isAdmin();
+      // El webhook de Stripe (cuenta de servicio admin) crea/actualiza pedidos.
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}

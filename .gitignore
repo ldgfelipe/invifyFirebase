@@ -1,0 +1,26 @@
+# Dependencias y build
+node_modules/
+.next/
+out/
+dist/
+build/
+
+# Variables de entorno (secretos)
+.env
+.env.local
+.env.*.local
+
+# Firebase
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Logs y SO
+*.log
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
