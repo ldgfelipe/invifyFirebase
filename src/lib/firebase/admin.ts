@@ -14,7 +14,7 @@ import { getAuth, type Auth } from "firebase-admin/auth";
 import { getStorage } from "firebase-admin/storage";
 
 function buildCredential() {
-  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID;
+  const projectId = process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
   const clientEmail = process.env.FIREBASE_ADMIN_CLIENT_EMAIL;
   const privateKey = process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, "\n");
 
@@ -30,7 +30,7 @@ let adminApp: App;
 if (getApps().length === 0) {
   const credential = buildCredential();
   const options: any = {
-    projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
+    projectId: process.env.FIREBASE_ADMIN_PROJECT_ID || process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
     storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   };
   // Solo pasamos credential cuando hay credenciales explícitas; si no, el SDK

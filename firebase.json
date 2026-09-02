@@ -7,17 +7,14 @@
     "rules": "storage.rules"
   },
   "hosting": {
-    "public": ".well-known",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "**/.next/**"],
-    "rewrites": [
-      {
-        "source": "**",
-        "run": {
-          "serviceId": "invify",
-          "region": "us-central1"
-        }
-      }
-    ],
+    "source": ".",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "**/.next/**", "**/.git/**"],
+    "frameworksBackend": {
+      "region": "us-central1",
+      "runtime": "nodejs20",
+      "memory": "1GiB",
+      "cpu": 1
+    },
     "headers": [
       {
         "source": "/i/**",

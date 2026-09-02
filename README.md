@@ -100,45 +100,37 @@ npm run dev                        # http://localhost:3000
 3. **Storage** → ya disponible con la cuenta Blaze.
 4. Desplegar reglas e índices: `firebase deploy --only firestore:rules,firestore:indexes,storage`.
 
-### Despliegue en Cloud Run + Firebase Hosting
+### Despliegue en Cloud Functions (2ª gen) + Firebase Hosting
 
-Firebase Hosting actúa como CDN y reescribe todo el tráfico al servicio de
-Cloud Run (`invify`), que ejecuta el build standalone de Next.js (SSR + API routes).
+Usa el backend de **Firebase Frameworks**: `firebase.json` declara
+`hosting.source` + `frameworksBackend`, y al desplegar solo hosting, Firebase
+detecta Next.js, compila y crea una **Cloud Function 2ª gen** (`ssr-<site>`) con
+el rewrite automático. **No necesitas gcloud** — solo la CLI de Firebase.
 
 ```bash
-# 1) Despliega reglas/índices (Blaze)
+# 1) Reglas e índices
 firebase deploy --only firestore:rules,firestore:indexes,storage
 
-# 2) Despliega el servidor en Cloud Run (build con Cloud Build)
-#   - NEXT_PUBLIC_* van en --build-env-vars: Next las inyecta en el bundle del
-#     cliente DURANTE el build (ARG del Dockerfile). Son públicas, no secretas.
-#   - Las secretas (Stripe, Admin) van en --set-env-vars Tiempo de ejecución.
-gcloud run deploy invify \
-  --source . \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --build-env-vars "NEXT_PUBLIC_SITE_URL=https://invify-online.web.app,NEXT_PUBLIC_FIREBASE_API_KEY=<tu_api_key>,NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=invify-online.firebaseapp.com,NEXT_PUBLIC_FIREBASE_PROJECT_ID=invify-online,NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=invify-online.firebasestorage.app,NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=20249934592,NEXT_PUBLIC_FIREBASE_APP_ID=1:20249934592:web:ca04868e2fe19de51c51e5,NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=<tu_publishable_key_test>" \
-  --set-env-vars "FIREBASE_ADMIN_PROJECT_ID=invify-online,STRIPE_SECRET_KEY=<tu_clave_secreta_test_de_env.local>" \
-  --env-vars-file=env.cloudrun.yaml
-#  -> NUNCA pongas la private key de la cuenta de servicio ni el webhook secret
-#     en el flag. Crea env.cloudrun.yaml (gitignored) con:
-#       FIREBASE_ADMIN_CLIENT_EMAIL: "xxx@invify-online.iam.gserviceaccount.com"
-#       FIREBASE_ADMIN_PRIVATE_KEY: "-----BEGIN RSA PRIVATE KEY-----\n..." # con \n
-#       STRIPE_WEBHOOK_SECRET: "whsec_..."
-
-# 3) Actualiza el rewrite de Hosting al servicio de Run
+# 2) App (build + función SSR + hosting). Las NEXT_PUBLIC_* de producción y los
+#    secretos viven en .env (raíz, gitignored); fuerzas el valor de SITE_URL en
+#    el proceso para que `next build` hornee el correcto en lugar de .env.local.
+#    En el ejemplo se usa PowerShell; con bash: export NEXT_PUBLIC_SITE_URL=...
+$env:NEXT_PUBLIC_SITE_URL="https://invify-online.web.app"
 firebase deploy --only hosting
 ```
 
-> Las claves secretas (cliente email, private key, webhook secret) viven en un
-> archivo `env.cloudrun.yaml` (o Secret Manager) y **nunca se commitean**.
+> En producción el Admin SDK usa la cuenta de servicio del runtime de Cloud
+> Functions (Application Default Credentials), así que **no definas claves
+> `FIREBASE_*` en archivos .env**: son prefijos reservados y Firebase Functions
+> rechaza el env. `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET` van en `.env` (raíz).
 
 ### Webhook de Stripe
 En el Dashboard de Stripe → **Webhooks**, añade el endpoint
-`https://<url-de-cloud-run>/api/stripe/webhook` con el evento
+`https://invify-online.web.app/api/stripe/webhook` con el evento
 `checkout.session.completed` (y opcionalmente `expired`/`async_payment_failed`).
-Pega el *Signing secret* en `STRIPE_WEBHOOK_SECRET`. Para pruebas locales:
-`stripe listen --forward-to localhost:3000/api/stripe/webhook`.
+Pega el *Signing secret* en `STRIPE_WEBHOOK_SECRET` (en el `.env` de la raíz) y
+vuelve a `firebase deploy --only hosting`. Para pruebas locales:
+`stripe listen --forward-to http://127.0.0.1:5001/invify-online/us-central1/ssr-invify-online/api/stripe/webhook`.
 
 ## Scripts
 
