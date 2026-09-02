@@ -10,6 +10,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "deploy": "firebase deploy",
+    "seed": "node scripts/seed.mjs",
     "emulators": "firebase emulators:start"
   },
   "dependencies": {

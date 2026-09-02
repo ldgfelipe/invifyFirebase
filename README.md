@@ -110,18 +110,28 @@ Cloud Run (`invify`), que ejecuta el build standalone de Next.js (SSR + API rout
 firebase deploy --only firestore:rules,firestore:indexes,storage
 
 # 2) Despliega el servidor en Cloud Run (build con Cloud Build)
+#   - NEXT_PUBLIC_* van en --build-env-vars: Next las inyecta en el bundle del
+#     cliente DURANTE el build (ARG del Dockerfile). Son públicas, no secretas.
+#   - Las secretas (Stripe, Admin) van en --set-env-vars Tiempo de ejecución.
 gcloud run deploy invify \
   --source . \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars "NEXT_PUBLIC_SITE_URL=https://invify-online.web.app,NEXT_PUBLIC_FIREBASE_API_KEY=...,NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...,NEXT_PUBLIC_FIREBASE_PROJECT_ID=...,NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...,NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...,NEXT_PUBLIC_FIREBASE_APP_ID=...,NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=..." \
-  --set-secrets "STRIPE_SECRET_KEY=stripe-secret:latest,FIREBASE_ADMIN_PROJECT_ID=firebase-admin-project:latest,FIREBASE_ADMIN_CLIENT_EMAIL=firebase-admin-email:latest,FIREBASE_ADMIN_PRIVATE_KEY=firebase-admin-key:latest,STRIPE_WEBHOOK_SECRET=stripe-webhook:latest"
+  --build-env-vars "NEXT_PUBLIC_SITE_URL=https://invify-online.web.app,NEXT_PUBLIC_FIREBASE_API_KEY=<tu_api_key>,NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=invify-online.firebaseapp.com,NEXT_PUBLIC_FIREBASE_PROJECT_ID=invify-online,NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=invify-online.firebasestorage.app,NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=20249934592,NEXT_PUBLIC_FIREBASE_APP_ID=1:20249934592:web:ca04868e2fe19de51c51e5,NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=<tu_publishable_key_test>" \
+  --set-env-vars "FIREBASE_ADMIN_PROJECT_ID=invify-online,STRIPE_SECRET_KEY=<tu_clave_secreta_test_de_env.local>" \
+  --env-vars-file=env.cloudrun.yaml
+#  -> NUNCA pongas la private key de la cuenta de servicio ni el webhook secret
+#     en el flag. Crea env.cloudrun.yaml (gitignored) con:
+#       FIREBASE_ADMIN_CLIENT_EMAIL: "xxx@invify-online.iam.gserviceaccount.com"
+#       FIREBASE_ADMIN_PRIVATE_KEY: "-----BEGIN RSA PRIVATE KEY-----\n..." # con \n
+#       STRIPE_WEBHOOK_SECRET: "whsec_..."
 
 # 3) Actualiza el rewrite de Hosting al servicio de Run
 firebase deploy --only hosting
 ```
 
-> Usa **Secret Manager** para las claves secretas. Nunca las commitees.
+> Las claves secretas (cliente email, private key, webhook secret) viven en un
+> archivo `env.cloudrun.yaml` (o Secret Manager) y **nunca se commitean**.
 
 ### Webhook de Stripe
 En el Dashboard de Stripe → **Webhooks**, añade el endpoint
@@ -133,4 +143,5 @@ Pega el *Signing secret* en `STRIPE_WEBHOOK_SECRET`. Para pruebas locales:
 ## Scripts
 
 - `npm run dev` · `npm run build` · `npm run lint` · `npm run typecheck`
+- `npm run seed` para poblar `/plans` (Stripe TEST), `/templates/demo-boda` y `/site/config`
 - `npm run emulators` para probar Auth/Firestore/Storage localmente.
