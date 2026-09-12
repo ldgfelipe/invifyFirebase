@@ -31,6 +31,7 @@ interface AuthContextValue {
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, name: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
+  signInWithGoogleRedirect: () => Promise<void>;
   signOut: () => Promise<void>;
   updateUserProfile: (data: Partial<UserProfile>) => void;
 }
@@ -92,11 +93,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const provider = new GoogleAuthProvider();
     provider.addScope("profile");
     provider.addScope("email");
+    provider.setCustomParameters({
+      prompt: "select_account",
+    });
     try {
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      console.log("Google sign-in successful:", result.user?.email);
     } catch (err: any) {
+      console.error("Google sign-in error:", err.code, err.message);
       // Si el popup fue bloqueado, intentar con redirect
       if (err.code === "auth/popup-blocked" || err.code === "auth/popup-closed-by-user") {
+        console.log("Popup blocked, trying redirect...");
         await signInWithRedirect(auth, provider);
       } else {
         throw err;
@@ -108,6 +115,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const provider = new GoogleAuthProvider();
     provider.addScope("profile");
     provider.addScope("email");
+    provider.setCustomParameters({
+      prompt: "select_account",
+    });
     await signInWithRedirect(auth, provider);
   }
 
@@ -130,6 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signInWithEmail,
         signUpWithEmail,
         signInWithGoogle,
+        signInWithGoogleRedirect,
         signOut,
         updateUserProfile,
       }}

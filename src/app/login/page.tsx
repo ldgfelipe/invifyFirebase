@@ -12,7 +12,7 @@ import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/cn";
 
 function LoginInner() {
-  const { signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
+  const { signInWithEmail, signUpWithEmail, signInWithGoogle, signInWithGoogleRedirect } = useAuth();
   const router = useRouter();
   const params = useSearchParams();
 
@@ -58,8 +58,26 @@ function LoginInner() {
     setError(null);
     setBusy(true);
     try {
+      // Guardar redirect params antes del redirect
+      if (template) sessionStorage.setItem("authTemplate", template);
+      if (redirect !== "/dashboard") sessionStorage.setItem("authRedirect", redirect);
       await signInWithGoogle();
       goAfterAuth();
+    } catch (err: any) {
+      setError(traducirError(err?.code));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleGoogleRedirect() {
+    setError(null);
+    setBusy(true);
+    try {
+      // Guardar redirect params antes del redirect
+      if (template) sessionStorage.setItem("authTemplate", template);
+      if (redirect !== "/dashboard") sessionStorage.setItem("authRedirect", redirect);
+      await signInWithGoogleRedirect();
     } catch (err: any) {
       setError(traducirError(err?.code));
     } finally {
@@ -84,6 +102,21 @@ function LoginInner() {
         >
           Continuar con Google
         </button>
+
+        <p className="text-center text-xs text-ink/50 mb-4">
+          ¿El popup se cierra?{" "}
+          <button
+            type="button"
+            onClick={() => {
+              setBusy(true);
+              signInWithGoogleRedirect().finally(() => setBusy(false));
+            }}
+            disabled={busy}
+            className="text-gold-500 underline hover:text-gold-600"
+          >
+            Usar redirección
+          </button>
+        </p>
 
         <div className="flex items-center gap-3 my-4 text-ink/40 text-xs">
           <div className="h-px flex-1 bg-ink/10" />
