@@ -31,6 +31,11 @@ export function SiteHeader() {
           <Link href="/pricing" className="hover:text-gold-500">
             Planes
           </Link>
+          {user && (
+            <Link href="/dashboard" className="hover:text-gold-500 font-medium">
+              Panel
+            </Link>
+          )}
           {profile?.role === "admin" && (
             <Link href="/admin" className="hover:text-gold-500">
               Admin

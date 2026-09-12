@@ -12,6 +12,9 @@ export interface UserProfile {
   displayName: string;
   role: UserRole;
   createdAt: number; // epoch ms
+  phone?: string;
+  bio?: string;
+  avatarUrl?: string;
 }
 
 // ----------------------------- Catálogo -------------------------------------
@@ -31,6 +34,7 @@ export interface Template {
 
 // ----------------------------- Invitaciones --------------------------------
 export type InvitationStatus = "draft" | "published";
+export type InvitationTier = "free" | "premium";
 
 export interface InvitationStats {
   views: number;
@@ -47,6 +51,9 @@ export interface Invitation {
   status: InvitationStatus;
   createdAt: number;
   orderId: string | null;
+  planId?: string; // plan comprado
+  tier: InvitationTier; // NUEVO: 'free' | 'premium'
+  tierUpdatedAt?: number; // timestamp del último cambio de tier
   // Config personalizada del cliente (copia editable del template).
   builderConfig: BuilderConfig;
   stats: InvitationStats;
@@ -79,16 +86,23 @@ export interface Plan {
   price: number; // en centavos
   currency: string;
   features: string[];
-  stripePriceId: string;
+  stripePriceId: string; // legacy
+  stripePriceIdTest?: string;
+  stripePriceIdLive?: string;
+  stripeProductId?: string; // para delete/update en Stripe
 }
 
 export interface Order {
   id: string;
   uid: string;
   planId: string;
+  templateId?: string;
   invitationId: string | null;
   status: "pending" | "paid" | "failed" | "canceled";
   stripeSessionId: string;
+  stripePaymentIntentId?: string;
+  amount?: number; // en centavos
+  currency?: string; // ej. "mxn", "usd"
   createdAt: number;
 }
 
@@ -241,11 +255,117 @@ export interface SeoMeta {
 
 // ----------------------------- Config del sitio (admin) ----------------------
 // Documento /site/config editable desde el panel admin; alimenta el hero y el
-// SEO de la landing principal.
+// SEO de la landing principal, y claves de pagos.
 export interface SiteSettings {
   heroTitle: string;
   heroSubtitle: string;
   heroCta: string;
   heroImage?: string;
   metaDescription: string;
+
+  // Stripe - Test
+  stripeTestPublishableKey?: string;
+  stripeTestSecretKey?: string;
+  stripeTestWebhookSecret?: string;
+
+  // Stripe - Live
+  stripeLivePublishableKey?: string;
+  stripeLiveSecretKey?: string;
+  stripeLiveWebhookSecret?: string;
+
+  // PayPal - Test
+  paypalTestClientId?: string;
+  paypalTestSecret?: string;
+  paypalTestWebhookId?: string;
+
+  // PayPal - Live
+  paypalLiveClientId?: string;
+  paypalLiveSecret?: string;
+  paypalLiveWebhookId?: string;
+
+  // Mercado Pago - Test
+  mercadopagoTestAccessToken?: string;
+  mercadopagoTestPublicKey?: string;
+  mercadopagoTestWebhookSecret?: string;
+
+  // Mercado Pago - Live
+  mercadopagoLiveAccessToken?: string;
+  mercadopagoLivePublicKey?: string;
+  mercadopagoLiveWebhookSecret?: string;
+
+  // Modo activo global (para UI)
+  stripeTestMode?: boolean; // true = test, false = live
+}
+
+// ----------------------------- Páginas CMS -----------------------------------
+// Cada página es un documento en /pages/{pageId}
+export interface Page {
+  id: string;
+  slug: string;           // URL path, ej: "/", "/nosotros", "/servicios"
+  title: string;          // Título interno
+  seoTitle?: string;      // Título SEO (opcional, usa title si no)
+  metaDescription?: string;
+  metaImage?: string;     // Open Graph image
+  builderConfig: BuilderConfig;  // Contenido visual (módulos)
+  status: "draft" | "published";
+  isHome: boolean;        // Solo una puede ser true (la home "/")
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ----------------------------- Logs / Auditoría -------------------------------
+export type LogAction =
+  | "user.login"
+  | "user.logout"
+  | "user.register"
+  | "user.profile_update"
+  | "user.password_change"
+  | "order.created"
+  | "order.paid"
+  | "order.failed"
+  | "order.cancelled"
+  | "order.refunded"
+  | "invitation.created"
+  | "invitation.updated"
+  | "invitation.published"
+  | "invitation.unpublished"
+  | "invitation.deleted"
+  | "invitation.cloned_from_template"
+  | "template.created"
+  | "template.updated"
+  | "template.deleted"
+  | "template.activated"
+  | "template.deactivated"
+  | "page.created"
+  | "page.updated"
+  | "page.published"
+  | "page.unpublished"
+  | "page.deleted"
+  | "page.set_as_home"
+  | "settings.updated"
+  | "settings.payment_keys_updated"
+  | "webhook.received"
+  | "webhook.processed"
+  | "webhook.failed"
+  | "payment.processed"
+  | "payment.refunded"
+  | "admin.user_created"
+  | "admin.user_updated"
+  | "admin.user_deleted"
+  | "admin.role_changed";
+
+export interface LogEntry {
+  id: string;
+  action: LogAction;
+  timestamp: number; // epoch ms
+  userId?: string;        // quién realizó la acción
+  userEmail?: string;
+  userRole?: string;      // "cliente" | "admin"
+  targetId?: string;      // ID del recurso afectado (orderId, invitationId, etc.)
+  targetType?: string;    // "order" | "invitation" | "page" | "template" | "user" | "settings"
+  metadata?: Record<string, any>; // datos adicionales flexibles
+  ip?: string;
+  userAgent?: string;
+  severity: "info" | "warning" | "error";
+  description: string;    // texto legible para humanos
 }

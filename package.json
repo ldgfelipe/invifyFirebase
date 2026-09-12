@@ -5,23 +5,27 @@
   "description": "Invify - Plataforma SaaS de invitaciones digitales interactivas (Firebase + Next.js)",
   "scripts": {
     "dev": "next dev",
+    "dev:local": "node scripts/dev-local.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "deploy": "firebase deploy",
     "seed": "node scripts/seed.mjs",
-    "emulators": "firebase emulators:start"
+    "seed:local": "node scripts/seed-emulator.mjs",
+    "emulators": "firebase emulators:start --only auth,firestore,storage"
   },
   "dependencies": {
+    "@stripe/react-stripe-js": "^6.9.0",
+    "@stripe/stripe-js": "^9.15.0",
+    "clsx": "2.1.1",
+    "firebase": "10.12.5",
+    "firebase-admin": "12.3.1",
+    "framer-motion": "11.3.19",
     "next": "14.2.5",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "firebase": "10.12.5",
-    "firebase-admin": "12.3.1",
     "stripe": "14.25.0",
-    "framer-motion": "11.3.19",
-    "clsx": "2.1.1",
     "tailwind-merge": "2.4.0"
   },
   "devDependencies": {

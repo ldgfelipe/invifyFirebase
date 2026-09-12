@@ -3,10 +3,16 @@
 // usando la MISMA config web (apiKey). No requiere cuenta de servicio.
 // Las reglas de Firestore ya permiten estas operaciones (plantillas activas,
 // invitaciones publicadas, planes y RSVP/Quiz anónimos).
+// Si NEXT_PUBLIC_EMULATOR=true (dev local), se apunta al emulador Firestore
+// en localhost:8080 en vez del proyecto real. Nunca afecta producción.
 // El Admin SDK queda reservado para el webhook de Stripe (privilegios elevados).
 // ============================================================================
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import {
+  getFirestore,
+  connectFirestoreEmulator,
+  type Firestore,
+} from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -23,3 +29,7 @@ const app: FirebaseApp =
   initializeApp(firebaseConfig, "server");
 
 export const serverDb: Firestore = getFirestore(app);
+
+if (process.env.NEXT_PUBLIC_EMULATOR === "true") {
+  connectFirestoreEmulator(serverDb, "localhost", 8080);
+}

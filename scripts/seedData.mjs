@@ -6,9 +6,9 @@
 export const PROYECTO_KEY = "invify-online";
 
 export const PLANS = [
-  { id: "plan_basic", name: "Básico", price: 900, features: ["1 invitación activa", "URL /i/slug propia", "Soporte de 1 tema"] },
-  { id: "plan_pro", name: "Pro", price: 1900, features: ["5 invitaciones activas", "RSVP + Quiz + Música", "Estadísticas de vistas"] },
-  { id: "plan_premium", name: "Premium", price: 2900, features: ["Invitaciones ilimitadas", "Todo el catálogo de temas", "Soporte prioritario"] },
+  { id: "plan_basic", name: "Básico", price: 15000, currency: "mxn", features: ["1 invitación activa", "URL /i/slug propia", "Soporte de 1 tema"] },
+  { id: "plan_pro", name: "Pro", price: 32000, currency: "mxn", features: ["5 invitaciones activas", "RSVP + Quiz + Música", "Estadísticas de vistas"] },
+  { id: "plan_premium", name: "Premium", price: 49000, currency: "mxn", features: ["Invitaciones ilimitadas", "Todo el catálogo de temas", "Soporte prioritario"] },
 ];
 
 export function siteConfig() {

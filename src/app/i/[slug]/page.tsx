@@ -75,7 +75,7 @@ export default async function InvitationPage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <ViewCounter invitationId={inv.id} />
-      <InvitationRenderer config={inv.builderConfig} invitationId={inv.id} />
+      <InvitationRenderer config={inv.builderConfig} invitationId={inv.id} tier={inv.tier ?? "free"} />
     </>
   );
 }

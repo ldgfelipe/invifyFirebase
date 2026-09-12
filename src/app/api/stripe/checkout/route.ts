@@ -4,12 +4,20 @@
 // Firestore y lo enlaza a la plantilla elegida para clonar en el webhook.
 // ============================================================================
 import { NextRequest, NextResponse } from "next/server";
-import { stripe } from "@/lib/stripe";
+import { getStripe } from "@/lib/stripe";
 import { adminDb, adminAuth } from "@/lib/firebase/admin";
 import { SITE_URL } from "@/lib/seo";
+import { LogHelper } from "@/lib/logging";
+
+function getOrigin(req: NextRequest): string {
+  const forwarded = req.headers.get("x-forwarded-host");
+  const host = forwarded ?? req.headers.get("host") ?? "";
+  const proto = req.headers.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
+  if (host) return `${proto}://${host}`;
+  return SITE_URL;
+}
 
 export async function POST(req: NextRequest) {
-  // 1) Autenticación: verifica el id token de Firebase.
   const authHeader = req.headers.get("authorization") ?? "";
   const idToken = authHeader.replace("Bearer ", "");
   if (!idToken) {
@@ -25,35 +33,43 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Token inválido" }, { status: 401 });
   }
 
-  // 2) Cuerpo: plan y plantilla seleccionada.
-  const { planId, templateId } = await req.json();
+  const { planId, templateId, mode } = await req.json();
+  const isTest = mode === "test";
 
-  // 3) Lee el plan para obtener el price de Stripe.
   const planSnap = await adminDb.collection("plans").doc(planId).get();
   if (!planSnap.exists) {
     return NextResponse.json({ error: "Plan no encontrado" }, { status: 404 });
   }
   const plan = planSnap.data() as any;
 
-  // 4) Crea el pedido en estado pendiente.
   const orderRef = adminDb.collection("orders").doc();
   await orderRef.set({
     id: orderRef.id,
     uid,
     planId,
+    templateId,
     invitationId: null,
     status: "pending",
     stripeSessionId: "",
+    amount: plan.price,
     createdAt: Date.now(),
   });
 
-  // 5) Crea la sesión de Checkout.
+  const stripe = await getStripe(isTest ? "test" : "live");
+
+  // Usar el Price ID correspondiente al modo
+  const priceId = isTest ? plan.stripePriceIdTest : plan.stripePriceIdLive;
+  if (!priceId) {
+    return NextResponse.json({ error: `Price ID ${isTest ? "test" : "live"} no configurado para este plan` }, { status: 400 });
+  }
+
+  const origin = getOrigin(req);
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     customer_email: email,
-    line_items: [{ price: plan.stripePriceId, quantity: 1 }],
-    success_url: `${SITE_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${SITE_URL}/pricing`,
+    line_items: [{ price: priceId, quantity: 1 }],
+    success_url: `${origin}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${origin}/pricing`,
     metadata: {
       orderId: orderRef.id,
       uid,
@@ -61,8 +77,10 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  // 6) Actualiza el pedido con el session id.
   await orderRef.update({ stripeSessionId: session.id });
+
+  // Log de auditoría
+  await LogHelper.orderCreated(orderRef.id, uid, planId, plan.price);
 
   return NextResponse.json({ url: session.url });
 }

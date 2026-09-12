@@ -17,7 +17,7 @@ import {
   signInWithPopup,
   GoogleAuthProvider,
   signOut as fbSignOut,
-  updateProfile,
+  updateProfile as fbUpdateProfile,
   type User,
 } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
@@ -32,6 +32,7 @@ interface AuthContextValue {
   signUpWithEmail: (email: string, password: string, name: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  updateUserProfile: (data: Partial<UserProfile>) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -70,12 +71,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function signInWithEmail(email: string, password: string) {
-    await signInWithEmailAndPassword(auth, email, password);
+    return await signInWithEmailAndPassword(auth, email, password);
   }
 
   async function signUpWithEmail(email: string, password: string, name: string) {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
-    await updateProfile(cred.user, { displayName: name });
+    await fbUpdateProfile(cred.user, { displayName: name });
     const ref = doc(db, "users", cred.user.uid);
     await setDoc(ref, {
       uid: cred.user.uid,
@@ -84,15 +85,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       role: "cliente",
       createdAt: serverTimestamp(),
     });
+    return cred;
   }
 
   async function signInWithGoogle() {
     const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    provider.addScope("profile");
+    provider.addScope("email");
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (err: any) {
+      // Si el popup fue bloqueado, intentar con redirect
+      if (err.code === "auth/popup-blocked" || err.code === "auth/popup-closed-by-user") {
+        await signInWithRedirect(auth, provider);
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  async function signInWithGoogleRedirect() {
+    const provider = new GoogleAuthProvider();
+    provider.addScope("profile");
+    provider.addScope("email");
+    await signInWithRedirect(auth, provider);
   }
 
   async function signOut() {
     await fbSignOut(auth);
+  }
+
+  function updateUserProfile(data: Partial<UserProfile>) {
+    if (profile) {
+      setProfile({ ...profile, ...data });
+    }
   }
 
   return (
@@ -105,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signUpWithEmail,
         signInWithGoogle,
         signOut,
+        updateUserProfile,
       }}
     >
       {children}

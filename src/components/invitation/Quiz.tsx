@@ -9,9 +9,11 @@ import type { QuizModule } from "@/lib/types";
 export function Quiz({
   module,
   invitationId,
+  demo = false,
 }: {
   module: QuizModule;
   invitationId: string;
+  demo?: boolean;
 }) {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<"idle" | "sending" | "ok" | "error">("idle");
@@ -25,6 +27,12 @@ export function Quiz({
     e.preventDefault();
     setStatus("sending");
     setMsg("");
+    if (demo) {
+      // Modo demo: no se guardan respuestas reales.
+      setStatus("ok");
+      setMsg("Vista previa: aquí se guardarían las respuestas de tus invitados.");
+      return;
+    }
     try {
       const res = await fetch("/api/quiz", {
         method: "POST",

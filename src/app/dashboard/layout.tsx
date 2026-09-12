@@ -1,8 +1,5 @@
 "use client";
 
-// ============================================================================
-// LAYOUT DASHBOARD - Protege las rutas con sesión. Redirige si no hay auth.
-// ============================================================================
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
@@ -13,7 +10,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading } = useAuth();
+  const { user, loading, profile, signOut } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -35,12 +32,18 @@ export default function DashboardLayout({
           <Link href="/dashboard" className="font-serif text-xl text-ink">
             Invify <span className="text-gold-500">·</span> Panel
           </Link>
-          <nav className="flex gap-4 text-sm">
+          <nav className="flex items-center gap-4 text-sm">
             <Link href="/templates" className="text-ink/70 hover:text-gold-500">
               Catálogo
             </Link>
             <Link href="/pricing" className="text-ink/70 hover:text-gold-500">
               Planes
+            </Link>
+            <Link href="/dashboard/profile" className="text-ink/70 hover:text-gold-500 flex items-center gap-1">
+              <span className="hidden sm:inline">Perfil</span>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
             </Link>
           </nav>
         </div>

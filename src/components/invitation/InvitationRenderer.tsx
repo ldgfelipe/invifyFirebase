@@ -3,7 +3,7 @@
 // Componente de servidor: orquesta módulos (algunos client, otros estáticos).
 // ============================================================================
 import type { BuilderConfig, InvitationModule } from "@/lib/types";
-import { Preloader } from "./Preloader";
+import { ConditionalPreloader } from "./ConditionalPreloader";
 import { Header } from "./Header";
 import { Countdown } from "./Countdown";
 import { AudioPlayer } from "./AudioPlayer";
@@ -15,13 +15,14 @@ import { GiftTable } from "./GiftTable";
 import { Quiz } from "./Quiz";
 import { RsvpForm } from "./Rsvp";
 
-function renderModule(module: InvitationModule, invitationId: string) {
+function renderModule(module: InvitationModule, invitationId: string, demo: boolean) {
   // Módulos no visibles se omiten (config del editor).
   if (!module.visible) return null;
 
+  // El preloader se maneja en ConditionalPreloader, lo omitimos aquí
+  if (module.type === "preloader") return null;
+
   switch (module.type) {
-    case "preloader":
-      return <Preloader imageUrl={module.imageUrl} text={module.text} />;
     case "header":
       return <Header module={module} />;
     case "countdown":
@@ -39,9 +40,9 @@ function renderModule(module: InvitationModule, invitationId: string) {
     case "giftTable":
       return <GiftTable module={module} />;
     case "quiz":
-      return <Quiz module={module} invitationId={invitationId} />;
+      return <Quiz module={module} invitationId={invitationId} demo={demo} />;
     case "rsvp":
-      return <RsvpForm module={module} invitationId={invitationId} />;
+      return <RsvpForm module={module} invitationId={invitationId} demo={demo} />;
     default:
       return null;
   }
@@ -50,9 +51,13 @@ function renderModule(module: InvitationModule, invitationId: string) {
 export function InvitationRenderer({
   config,
   invitationId,
+  demo = false,
+  tier = "free",
 }: {
   config: BuilderConfig;
   invitationId: string;
+  demo?: boolean;
+  tier?: "free" | "premium";
 }) {
   // Aplica color temático global vía CSS variable.
   const themeStyle = {
@@ -60,11 +65,20 @@ export function InvitationRenderer({
     background: config.theme.background,
   } as React.CSSProperties;
 
+  // Encuentra configuración del preloader para pasársela al ConditionalPreloader
+  const preloaderModule = config.modules.find((m) => m.type === "preloader");
+
   return (
     <main style={themeStyle} className="min-h-screen">
-      {config.modules.map((m) => (
-        <div key={m.id}>{renderModule(m, invitationId)}</div>
-      ))}
+      <ConditionalPreloader
+        tier={tier}
+        invitationId={invitationId}
+        preloaderConfig={preloaderModule}
+      >
+        {config.modules.map((m) => (
+          <div key={m.id}>{renderModule(m, invitationId, demo)}</div>
+        ))}
+      </ConditionalPreloader>
     </main>
   );
 }

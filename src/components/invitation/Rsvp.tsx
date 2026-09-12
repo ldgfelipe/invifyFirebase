@@ -10,9 +10,11 @@ import type { RsvpModule } from "@/lib/types";
 export function RsvpForm({
   module,
   invitationId,
+  demo = false,
 }: {
   module: RsvpModule;
   invitationId: string;
+  demo?: boolean;
 }) {
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
@@ -24,6 +26,12 @@ export function RsvpForm({
     e.preventDefault();
     setStatus("sending");
     setMsg("");
+    if (demo) {
+      // Modo demo: no se guarda una confirmación real.
+      setStatus("ok");
+      setMsg("Vista previa: aquí tus invitados confirmarían su asistencia.");
+      return;
+    }
     try {
       const res = await fetch("/api/rsvp", {
         method: "POST",

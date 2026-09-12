@@ -45,7 +45,8 @@ function LoginInner() {
       } else {
         await signUpWithEmail(email, password, name);
       }
-      goAfterAuth();
+      // onAuthStateChanged en AuthContext detectará el cambio y redirigirá
+      // goAfterAuth() se llama desde el listener de auth
     } catch (err: any) {
       setError(traducirError(err?.code));
     } finally {

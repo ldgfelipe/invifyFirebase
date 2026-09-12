@@ -6,24 +6,6 @@
   "storage": {
     "rules": "storage.rules"
   },
-  "hosting": {
-    "source": ".",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "**/.next/**", "**/.git/**"],
-    "frameworksBackend": {
-      "region": "us-central1",
-      "runtime": "nodejs20",
-      "memory": "1GiB",
-      "cpu": 1
-    },
-    "headers": [
-      {
-        "source": "/i/**",
-        "headers": [
-          { "key": "Cache-Control", "value": "public, max-age=300, stale-while-revalidate=600" }
-        ]
-      }
-    ]
-  },
   "emulators": {
     "auth": { "port": 9099 },
     "firestore": { "port": 8080 },

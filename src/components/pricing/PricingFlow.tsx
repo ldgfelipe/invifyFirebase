@@ -1,14 +1,74 @@
 "use client";
 
-// ============================================================================
-// PRICING FLOW - Muestra planes y arranca el checkout de Stripe.
-// Si no hay sesión, muestra el Auth Wall conservando la plantilla elegida.
-// ============================================================================
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import type { Plan } from "@/lib/types";
 import { cn } from "@/lib/cn";
+import { loadStripe } from "@stripe/stripe-js";
+import {
+  Elements,
+  PaymentElement,
+  useStripe,
+  useElements,
+} from "@stripe/react-stripe-js";
+import { formatPrice } from "@/lib/currency";
+
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+
+function EmbeddedCheckout({
+  clientSecret,
+  onSuccess,
+  onError,
+}: {
+  clientSecret: string;
+  onSuccess: () => void;
+  onError: (msg: string) => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const [processing, setProcessing] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!stripe || !elements || processing) return;
+
+    setProcessing(true);
+    console.log("[Stripe] Confirmando pago...");
+
+    const result = await stripe.confirmPayment({
+      elements,
+      confirmParams: {
+        return_url: `${window.location.origin}/dashboard`,
+      },
+    });
+
+    const error = result.error;
+    const paymentIntent = (result as any).paymentIntent;
+
+    if (error) {
+      console.error("[Stripe] Error:", error);
+      setProcessing(false);
+      onError(error.message ?? "Error en el pago");
+    } else if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "requires_capture") {
+      console.log("[Stripe] Pago exitoso:", paymentIntent.id);
+      onSuccess();
+    } else {
+      console.log("[Stripe] Estado:", paymentIntent?.status);
+      setProcessing(false);
+      onSuccess(); // El webhook manejará la confirmación final
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <PaymentElement />
+      <button type="submit" disabled={!stripe || processing} className="btn-primary w-full py-3">
+        {processing ? "Procesando…" : "Pagar"}
+      </button>
+    </form>
+  );
+}
 
 export function PricingFlow({
   plans,
@@ -20,13 +80,15 @@ export function PricingFlow({
   const { user, loading } = useAuth();
   const router = useRouter();
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showEmbedded, setShowEmbedded] = useState(false);
 
   if (loading) {
     return <div className="text-center py-20 text-ink/60">Cargando…</div>;
   }
 
-  // AUTH WALL: si no hay sesión, redirigimos al login conservando la plantilla.
   if (!user) {
     const q = templateId ? `?redirect=/pricing&template=${templateId}` : "?redirect=/pricing";
     router.replace(`/login${q}`);
@@ -37,23 +99,61 @@ export function PricingFlow({
     setBusyPlan(plan.id);
     setError(null);
     try {
-      // Obtenemos el id token freso para autenticar la API de checkout.
       const token = await user!.getIdToken();
-      const res = await fetch("/api/stripe/checkout", {
+      
+      // Determinar modo test/live desde SiteSettings o usar localStorage
+      const isTestMode = typeof window !== "undefined" 
+        ? localStorage.getItem("stripeTestMode") !== "false" 
+        : true; // default test
+      
+      const res = await fetch("/api/stripe/checkout/embedded", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ planId: plan.id, templateId }),
+        body: JSON.stringify({ planId: plan.id, templateId, mode: isTestMode ? "test" : "live" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "No se pudo iniciar el pago");
-      window.location.href = data.url;
+
+      setSelectedPlan(plan);
+      setClientSecret(data.clientSecret);
+      setShowEmbedded(true);
     } catch (err: any) {
       setError(err.message);
+    } finally {
       setBusyPlan(null);
     }
+  }
+
+  function handlePaymentSuccess() {
+    setShowEmbedded(false);
+    setClientSecret(null);
+    setSelectedPlan(null);
+    router.push("/dashboard");
+  }
+
+  if (showEmbedded && clientSecret) {
+    return (
+      <div className="max-w-md mx-auto card p-8">
+        <h2 className="font-serif text-xl text-center mb-6">Completar pago</h2>
+        <Elements stripe={stripePromise} options={{ clientSecret }}>
+          <EmbeddedCheckout
+            clientSecret={clientSecret}
+            onSuccess={handlePaymentSuccess}
+            onError={(msg) => { setError(msg); setShowEmbedded(false); setClientSecret(null); }}
+          />
+        </Elements>
+        {error && <p className="text-center text-red-600 mt-4">{error}</p>}
+        <button
+          onClick={() => { setShowEmbedded(false); setClientSecret(null); }}
+          className="btn-outline w-full mt-4"
+        >
+          Cancelar
+        </button>
+      </div>
+    );
   }
 
   return (
@@ -81,7 +181,7 @@ export function PricingFlow({
             )}
             <h2 className="font-serif text-2xl text-ink">{plan.name}</h2>
             <p className="text-3xl font-serif text-gold-500 my-4">
-              ${(plan.price / 100).toFixed(2)}
+              {formatPrice(plan.price, plan.currency as "mxn" | "usd" | "eur")}
             </p>
             <ul className="space-y-2 text-sm text-ink/70 flex-1">
               {plan.features.map((f) => (
@@ -96,7 +196,7 @@ export function PricingFlow({
               disabled={busyPlan === plan.id}
               className={cn("btn-primary w-full mt-6", busyPlan === plan.id && "opacity-60")}
             >
-              {busyPlan === plan.id ? "Redirigiendo…" : "Seleccionar"}
+              {busyPlan === plan.id ? "Preparando…" : "Seleccionar"}
             </button>
           </div>
         ))}

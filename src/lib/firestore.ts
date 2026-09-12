@@ -51,10 +51,16 @@ export async function incrementInvitationViews(
   });
 }
 
-/** Obtiene una plantilla por id (lectura pública). */
+/** Obtiene una plantilla por id (lectura pública con SDK web). */
 export async function getTemplate(templateId: string): Promise<Template | null> {
   const snap = await getDoc(doc(serverDb, "templates", templateId));
   return snap.exists() ? (snap.data() as Template) : null;
+}
+
+/** Obtiene una plantilla por id (Admin SDK, para webhooks). */
+export async function getTemplateAdmin(templateId: string): Promise<Template | null> {
+  const snap = await adminDb.collection("templates").doc(templateId).get();
+  return snap.exists ? (snap.data() as Template) : null;
 }
 
 /**
@@ -68,7 +74,7 @@ export async function cloneTemplateToInvitation(params: {
   planId: string;
   orderId: string;
 }): Promise<string> {
-  const template = await getTemplate(params.templateId);
+  const template = await getTemplateAdmin(params.templateId);
   if (!template) throw new Error("Plantilla no encontrada");
 
   const invitationRef = adminDb.collection("invitations").doc();
@@ -84,6 +90,8 @@ export async function cloneTemplateToInvitation(params: {
     status: "draft",
     createdAt: now,
     orderId: params.orderId,
+    tier: "free", // NUEVO: por defecto free
+    tierUpdatedAt: now,
     builderConfig: template.builderConfig,
     stats: { views: 0, uniqueViews: 0 },
   };

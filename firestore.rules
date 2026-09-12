@@ -92,7 +92,16 @@ service cloud.firestore {
       allow read: if isOwner(resource.data.uid) || isAdmin();
       // El webhook de Stripe (cuenta de servicio admin) crea/actualiza pedidos.
       allow create, update: if isAdmin();
-      allow delete: if isAdmin();
+      // El dueño puede cancelar (eliminar) sus pedidos PENDIENTES; admin siempre puede.
+      allow delete: if isAdmin() || (isOwner(resource.data.uid) && resource.data.status == 'pending');
+    }
+
+    // ---- /logs : auditoría (solo admin lee; servidor escribe via Admin SDK) ----
+    match /logs/{logId} {
+      allow read: if isAdmin();
+      // El cliente puede escribir sus propios logs via API /api/logs (validado en server)
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
     }
   }
 }
