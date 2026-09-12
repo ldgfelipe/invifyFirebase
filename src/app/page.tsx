@@ -18,7 +18,7 @@ export default async function HomePage() {
       {/* HERO */}
       <section className="relative min-h-[70vh] flex flex-col items-center justify-center text-center px-6 bg-champagne">
         <p className="uppercase tracking-[0.3em] text-gold-500 text-sm mb-4">
-          Invitaciones digitales
+          ✨ Invify - Invitaciones digitales
         </p>
         <h1 className="font-serif text-5xl md:text-7xl text-ink max-w-3xl">
           {settings.heroTitle}
