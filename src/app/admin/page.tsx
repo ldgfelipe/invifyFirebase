@@ -124,7 +124,7 @@ export default async function AdminDashboard() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-serif text-xl text-ink">Ultimas invitaciones</h2>
             <Link href="/admin/pages" className="text-sm text-gold-500 hover:underline">
-              Ver todas ->
+              Ver todas -{">"}
             </Link>
           </div>
           <div className="space-y-3">
@@ -165,7 +165,7 @@ export default async function AdminDashboard() {
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-serif text-xl text-ink">Ultimas ventas</h2>
             <Link href="/admin/sales" className="text-sm text-gold-500 hover:underline">
-              Ver CRM ->
+              Ver CRM -{">"}
             </Link>
           </div>
           <div className="space-y-2">
@@ -202,7 +202,7 @@ export default async function AdminDashboard() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-serif text-xl text-ink">Plantillas activas</h2>
           <Link href="/admin/templates" className="text-sm text-gold-500 hover:underline">
-            Gestionar ->
+            Gestionar -{">"}
           </Link>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
