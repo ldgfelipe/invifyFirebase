@@ -1,5 +1,5 @@
 // ============================================================================
-// ADMIN DASHBOARD - Métricas y resumen general
+// ADMIN DASHBOARD - Metricas y resumen general
 // Server Component para carga inicial de datos (SEO, performance)
 // ============================================================================
 import { adminDb } from "@/lib/firebase/admin";
@@ -15,7 +15,6 @@ import Link from "next/link";
 import { formatPrice } from "@/lib/currency";
 
 export default async function AdminDashboard() {
-  // Consultas paralelas para métricas
   const [
     invitationsSnap,
     usersSnap,
@@ -37,30 +36,27 @@ export default async function AdminDashboard() {
     )),
   ]);
 
-  const invitations = invitationsSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-  const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-  const paidOrders = ordersSnap.docs.map(d => d.data() as any);
-  const templates = templatesSnap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+  const invitations = invitationsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const paidOrders = ordersSnap.docs.map(d => d.data());
+  const templates = templatesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-  // Métricas calculadas
   const totalInvitations = invitations.length;
-  const freeCount = invitations.filter((i: any) => i.tier === "free").length;
-  const premiumCount = invitations.filter((i: any) => i.tier === "premium").length;
+  const freeCount = invitations.filter((i) => i.tier === "free").length;
+  const premiumCount = invitations.filter((i) => i.tier === "premium").length;
   const conversionRate = totalInvitations > 0
     ? ((premiumCount / totalInvitations) * 100).toFixed(1)
     : "0.0";
 
   const totalUsers = users.length;
-  const adminUsers = users.filter((u: any) => u.role === "admin").length;
-  const totalRevenue = paidOrders.reduce((sum: number, o: any) => sum + (o.amount || 0), 0);
+  const adminUsers = users.filter((u) => u.role === "admin").length;
+  const totalRevenue = paidOrders.reduce((sum, o) => sum + (o.amount || 0), 0);
   const activeTemplates = templates.length;
 
-  // Ultimas invitaciones creadas
   const recentInvitations = invitations
-    .sort((a: any, b: any) => b.createdAt - a.createdAt)
+    .sort((a, b) => b.createdAt - a.createdAt)
     .slice(0, 5);
 
-  // Ultimos pedidos pagados
   const recentOrders = paidOrders.slice(0, 5);
 
   return (
@@ -73,13 +69,13 @@ export default async function AdminDashboard() {
           label="Invitaciones totales"
           value={invitations.length}
           color="blue"
-          icon=""
+          icon="[email]"
         />
         <KpiCard
           label="Gratuitas (Free)"
           value={freeCount}
           color="amber"
-          icon=""
+          icon="[free]"
         />
         <KpiCard
           label="Premium"
@@ -88,10 +84,10 @@ export default async function AdminDashboard() {
           icon="[star]"
         />
         <KpiCard
-          label="Conversión"
-          value={`${conversionRate}%`}
+          label="Conversion"
+          value={conversionRate + "%"}
           color="gold"
-          icon=""
+          icon="[chart]"
         />
       </div>
 
@@ -100,30 +96,30 @@ export default async function AdminDashboard() {
           label="Usuarios totales"
           value={users.length}
           color="blue"
-          icon=""
+          icon="[users]"
         />
         <KpiCard
           label="Admins"
           value={adminUsers}
           color="purple"
-          icon=""
+          icon="[shield]"
         />
         <KpiCard
           label="Ingresos totales"
           value={formatPrice(totalRevenue, "mxn")}
           color="gold"
-          icon=""
+          icon="[money]"
         />
         <KpiCard
           label="Plantillas activas"
           value={activeTemplates}
           color="green"
-          icon=""
+          icon="[art]"
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Ultimas invitaciones */}
+        {/* Recent invitations */}
         <section className="card p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-serif text-xl text-ink">Ultimas invitaciones</h2>
@@ -133,10 +129,10 @@ export default async function AdminDashboard() {
           </div>
           <div className="space-y-3">
             {recentInvitations.length === 0 ? (
-              <p className="text-ink/50 text-center py-8">Sin invitaciones aún</p>
+              <p className="text-ink/50 text-center py-8">Sin invitaciones aun</p>
             ) : (
               <div className="space-y-2">
-                {recentInvitations.map((inv: any) => (
+                {recentInvitations.map((inv) => (
                   <Link
                     key={inv.id}
                     href={`/admin/pages/${inv.id}`}
@@ -145,8 +141,7 @@ export default async function AdminDashboard() {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-ink truncate">{inv.title}</p>
                       <p className="text-xs text-ink/50">
-                        {inv.tier === "premium" ? "[star] Premium" : " Free"} .{" "}
-                        {new Date(inv.createdAt).toLocaleDateString("es-ES")}
+                        {inv.tier === "premium" ? "[star] Premium" : "[free] Free"} . {new Date(inv.createdAt).toLocaleDateString("es-ES")}
                       </p>
                     </div>
                     <span
@@ -163,71 +158,71 @@ export default async function AdminDashboard() {
               </div>
             )}
           </div>
+        </section>
 
-          {/* Ultimos pedidos pagados */}
-          <section className="card p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-serif text-xl text-ink">Ultimas ventas</h2>
-              <Link href="/admin/sales" className="text-sm text-gold-500 hover:underline">
-                Ver CRM ->
-              </Link>
-            </div>
-            <div className="space-y-2">
-              {recentOrders.length === 0 ? (
-                <p className="text-ink/50 text-center py-8">Sin ventas aún</p>
-              ) : (
-                <div className="space-y-2">
-                  {recentOrders.map((order: any) => (
-                    <div
-                      key={order.id}
-                      className="flex items-center justify-between p-3 bg-ink/5 rounded-lg"
-                    >
-                      <div>
-                        <p className="font-mono text-xs text-ink/70">
-                          {order.id.slice(0, 12)}
-                        </p>
-                        <p className="text-xs text-ink/50">
-                          Plan: {order.planId} . {formatPrice(order.amount || 0, "mxn")}
-                        </p>
-                      </div>
-                      <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
-                        Pagado
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-        </div>
-
-        {/* Plantillas activas */}
-        <section className="card p-6 lg:col-span-2">
+        {/* Recent paid orders */}
+        <section className="card p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-serif text-xl text-ink">Plantillas activas</h2>
-            <Link href="/admin/templates" className="text-sm text-gold-500 hover:underline">
-              Gestionar ->
+            <h2 className="font-serif text-xl text-ink">Ultimas ventas</h2>
+            <Link href="/admin/sales" className="text-sm text-gold-500 hover:underline">
+              Ver CRM ->
             </Link>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {templates.slice(0, 8).map((tpl: any) => (
-              <Link
-                key={tpl.id}
-                href={`/admin/templates/${tpl.id}`}
-                className="card p-3 hover:shadow-md transition"
-              >
-                <img
-                  src={tpl.thumbnailUrl}
-                  alt={tpl.name}
-                  className="w-full h-24 object-cover rounded-lg mb-2"
-                />
-                <p className="font-medium text-sm text-ink truncate">{tpl.name}</p>
-                <p className="text-xs text-ink/50 capitalize">{tpl.category}</p>
-              </Link>
-            ))}
+          <div className="space-y-2">
+            {recentOrders.length === 0 ? (
+              <p className="text-ink/50 text-center py-8">Sin ventas aun</p>
+            ) : (
+              <div className="space-y-2">
+                {recentOrders.map((order) => (
+                  <div
+                    key={order.id}
+                    className="flex items-center justify-between p-3 bg-ink/5 rounded-lg"
+                  >
+                    <div>
+                      <p className="font-mono text-xs text-ink/70">
+                        {order.id.slice(0, 12)}…
+                      </p>
+                      <p className="text-xs text-ink/50">
+                        Plan: {order.planId} . {formatPrice(order.amount || 0, "mxn")}
+                      </p>
+                    </div>
+                    <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
+                      Pagado
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </section>
       </div>
+
+      {/* Active templates */}
+      <section className="card p-6 lg:col-span-2">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-serif text-xl text-ink">Plantillas activas</h2>
+          <Link href="/admin/templates" className="text-sm text-gold-500 hover:underline">
+            Gestionar ->
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          {templates.slice(0, 8).map((tpl) => (
+            <Link
+              key={tpl.id}
+              href={`/admin/templates/${tpl.id}`}
+              className="card p-3 hover:shadow-md transition"
+            >
+              <img
+                src={tpl.thumbnailUrl}
+                alt={tpl.name}
+                className="w-full h-24 object-cover rounded-lg mb-2"
+              />
+              <p className="font-medium text-sm text-ink truncate">{tpl.name}</p>
+              <p className="text-xs text-ink/50 capitalize">{tpl.category}</p>
+            </Link>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
@@ -237,12 +232,7 @@ function KpiCard({
   value,
   color = "blue",
   icon = "",
-}: {
-  label: string;
-  value: string | number;
-  color?: string;
-  icon?: string;
-}) {
+} = {}) {
   const colors = {
     blue: "bg-blue-50 text-blue-700 border-blue-200",
     green: "bg-green-50 text-green-700 border-green-200",
@@ -252,7 +242,7 @@ function KpiCard({
     red: "bg-red-50 text-red-700 border-red-200",
   };
   return (
-    <div className={`card p-5 border ${colors[color as keyof typeof colors] || colors.blue}`}>
+    <div className={`card p-5 border ${colors[color] || colors.blue}`}>
       <div className="flex items-center gap-2 mb-1">
         <span className="text-xl">{icon}</span>
         <p className="text-2xl font-serif font-bold">{value}</p>
