@@ -3,16 +3,10 @@
 // Server Component para carga inicial de datos (SEO, performance)
 // ============================================================================
 import { adminDb } from "@/lib/firebase/admin";
-import {
-  collection,
-  query,
-  where,
-  getDocs,
-  orderBy,
-  limit,
-} from "firebase/firestore";
 import Link from "next/link";
 import { formatPrice } from "@/lib/currency";
+
+export const dynamic = "force-dynamic";
 
 export default async function AdminDashboard() {
   const [
@@ -21,25 +15,23 @@ export default async function AdminDashboard() {
     ordersSnap,
     templatesSnap,
   ] = await Promise.all([
-    getDocs(collection(adminDb, "invitations")),
-    getDocs(collection(adminDb, "users")),
-    getDocs(query(
-      collection(adminDb, "orders"),
-      where("status", "==", "paid"),
-      orderBy("createdAt", "desc"),
-      limit(10)
-    )),
-    getDocs(query(
-      collection(adminDb, "templates"),
-      where("active", "==", true),
-      orderBy("createdAt", "desc")
-    )),
+    adminDb.collection("invitations").get(),
+    adminDb.collection("users").get(),
+    adminDb.collection("orders")
+      .where("status", "==", "paid")
+      .orderBy("createdAt", "desc")
+      .limit(10)
+      .get(),
+    adminDb.collection("templates")
+      .where("active", "==", true)
+      .orderBy("createdAt", "desc")
+      .get(),
   ]);
 
-  const invitations = invitationsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  const users = usersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  const paidOrders = ordersSnap.docs.map(d => d.data());
-  const templates = templatesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const invitations = invitationsSnap.docs.map(d => ({ id: d.id, ...(d.data() as { tier: string; createdAt: number; title: string; })}));
+  const users = usersSnap.docs.map(d => ({ id: d.id, ...(d.data() as { role: string; email: string; displayName: string; createdAt: number }) }));
+  const paidOrders = ordersSnap.docs.map(d => ({ id: d.id, ...(d.data() as { amount: number; planId: string; uid: string; templateId?: string }) }));
+  const templates = templatesSnap.docs.map(d => ({ id: d.id, ...(d.data() as { name: string; category: string; thumbnailUrl: string })}));
 
   const totalInvitations = invitations.length;
   const freeCount = invitations.filter((i) => i.tier === "free").length;
@@ -228,12 +220,17 @@ export default async function AdminDashboard() {
 }
 
 function KpiCard({
-  label,
-  value,
+  label = "",
+  value = "",
   color = "blue",
   icon = "",
+}: {
+  label?: string;
+  value?: string | number;
+  color?: "blue" | "green" | "amber" | "gold" | "purple" | "red";
+  icon?: string;
 } = {}) {
-  const colors = {
+  const colors: Record<string, string> = {
     blue: "bg-blue-50 text-blue-700 border-blue-200",
     green: "bg-green-50 text-green-700 border-green-200",
     amber: "bg-amber-50 text-amber-700 border-amber-200",
