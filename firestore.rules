@@ -19,6 +19,15 @@ service cloud.firestore {
     function isOwner(uid) {
       return isSignedIn() && request.auth.uid == uid;
     }
+    // Email propietario con privilegio de bootstrap (primer admin).
+    function isOwnerEmail() {
+      return request.auth.token.email == 'ldgfelipecarrera@gmail.com';
+    }
+    // Campos del perfil que el propio usuario puede editar (nunca el rol).
+    function isProfilePatch() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['displayName', 'avatarUrl', 'phone', 'bio', 'billing']);
+    }
 
     // ---- /templates : catálogo público (solo lectura para invitados) ----
     // Los invitados pueden ver plantillas activas; solo admin puede escribir.
@@ -35,9 +44,18 @@ service cloud.firestore {
     // ---- /users : perfil del propio usuario ----
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      // Creación solo por el propio usuario autenticado (o admin).
-      allow create: if isOwner(uid);
-      allow update: if isOwner(uid) || isAdmin();
+      // Creación: el dueño crea su perfil como 'cliente'; el email propietario
+      // bootstrap puede crearse directamente como 'admin'.
+      allow create: if isOwner(uid)
+        && (request.resource.data.role == 'cliente'
+          || (isOwnerEmail() && request.resource.data.role == 'admin'));
+      // Actualización:
+      //  - admin puede editar todo (gestión de permisos).
+      //  - el dueño solo edita campos de perfil (nunca el rol).
+      //  - el email propietario por defecto puede autopromoverse a admin.
+      allow update: if isAdmin()
+        || (isOwner(uid) && isProfilePatch())
+        || (isOwner(uid) && isOwnerEmail() && request.resource.data.role == 'admin' && resource.data.role == 'cliente');
       allow delete: if isAdmin();
     }
 

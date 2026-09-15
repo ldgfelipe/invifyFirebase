@@ -6,6 +6,15 @@
 // ----------------------------- Auth / Usuarios -----------------------------
 export type UserRole = "cliente" | "admin";
 
+export interface UserBilling {
+  rfc?: string;
+  razonSocial?: string;
+  emailFiscal?: string;
+  direccion?: string;
+  cp?: string;
+  telefono?: string;
+}
+
 export interface UserProfile {
   uid: string;
   email: string;
@@ -15,6 +24,7 @@ export interface UserProfile {
   phone?: string;
   bio?: string;
   avatarUrl?: string;
+  billing?: UserBilling;
 }
 
 // ----------------------------- Catálogo -------------------------------------

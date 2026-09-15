@@ -22,9 +22,10 @@ import {
   type User,
   type UserCredential,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
 import type { UserProfile } from "@/lib/types";
+import { isOwnerAdminEmail } from "@/lib/config";
 
 interface AuthContextValue {
   user: User | null;
@@ -49,20 +50,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsub = onAuthStateChanged(auth, async (u) => {
       setUser(u);
       if (u) {
-        // Carga o crea el perfil en /users/{uid} (reglas: solo el dueño crea).
+        // Carga o crea el perfil en /users/{uid} (reglas: el dueño crea el suyo).
         const ref = doc(db, "users", u.uid);
         const snap = await getDoc(ref);
         if (snap.exists()) {
-          setProfile(snap.data() as UserProfile);
+          const existing = snap.data() as UserProfile;
+          // El email del propietario tiene privilegio de bootstrap: si aún no
+          // es admin, se promueve automáticamente (reglas lo permiten una vez).
+          if (isOwnerAdminEmail(u.email) && existing.role !== "admin") {
+            try {
+              await updateDoc(ref, { role: "admin" });
+              setProfile({ ...existing, role: "admin" });
+            } catch {
+              setProfile(existing);
+            }
+          } else {
+            setProfile(existing);
+          }
         } else {
+          const isOwner = isOwnerAdminEmail(u.email);
           const newProfile: UserProfile = {
             uid: u.uid,
             email: u.email ?? "",
             displayName: u.displayName ?? "",
-            role: "cliente",
+            role: isOwner ? "admin" : "cliente",
             createdAt: Date.now(),
           };
-          await setDoc(ref, { ...newProfile, createdAt: serverTimestamp() });
+          try {
+            await setDoc(ref, { ...newProfile, createdAt: serverTimestamp() });
+          } catch {
+            // Si la creación falla (ej. reglas), seguimos con el perfil local.
+          }
           setProfile(newProfile);
         }
       } else {

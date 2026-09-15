@@ -13,7 +13,7 @@
     "deploy": "firebase deploy",
     "seed": "node scripts/seed.mjs",
     "seed:local": "node scripts/seed-emulator.mjs",
-    "emulators": "firebase emulators:start --only auth,firestore,storage"
+    "emulators": "node scripts/emulators.mjs"
   },
   "dependencies": {
     "@stripe/react-stripe-js": "^6.9.0",

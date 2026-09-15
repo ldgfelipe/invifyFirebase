@@ -1,52 +1,107 @@
+"use client";
+
 // ============================================================================
-// ADMIN DASHBOARD - Metricas y resumen general
-// Server Component para carga inicial de datos (SEO, performance)
+// ADMIN DASHBOARD - Métricas y resumen general
+// Carga los datos con el SDK de cliente (reglas: lectura completa solo admin).
 // ============================================================================
-import { adminDb } from "@/lib/firebase/admin";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useAuth } from "@/context/AuthContext";
+import { db } from "@/lib/firebase/client";
+import {
+  collection,
+  query,
+  orderBy,
+  limit,
+  getDocs,
+} from "firebase/firestore";
 import { formatPrice } from "@/lib/currency";
 
-export const dynamic = "force-dynamic";
+export default function AdminDashboard() {
+  const { user } = useAuth();
+  const [data, setData] = useState<{
+    invitations: any[];
+    users: any[];
+    paidOrders: any[];
+    templates: any[];
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-export default async function AdminDashboard() {
-  const [
-    invitationsSnap,
-    usersSnap,
-    ordersSnap,
-    templatesSnap,
-  ] = await Promise.all([
-    adminDb.collection("invitations").get(),
-    adminDb.collection("users").get(),
-    adminDb.collection("orders")
-      .where("status", "==", "paid")
-      .orderBy("createdAt", "desc")
-      .limit(10)
-      .get(),
-    adminDb.collection("templates")
-      .where("active", "==", true)
-      .orderBy("createdAt", "desc")
-      .get(),
-  ]);
+  useEffect(() => {
+    if (!user) return;
+    loadAll();
+  }, [user]);
 
-  const invitations = invitationsSnap.docs.map(d => ({ id: d.id, ...(d.data() as { tier: string; createdAt: number; title: string; })}));
-  const users = usersSnap.docs.map(d => ({ id: d.id, ...(d.data() as { role: string; email: string; displayName: string; createdAt: number }) }));
-  const paidOrders = ordersSnap.docs.map(d => ({ id: d.id, ...(d.data() as { amount: number; planId: string; uid: string; templateId?: string }) }));
-  const templates = templatesSnap.docs.map(d => ({ id: d.id, ...(d.data() as { name: string; category: string; thumbnailUrl: string })}));
+  async function loadAll() {
+    try {
+      const [invitationsSnap, usersSnap, ordersSnap, templatesSnap] =
+        await Promise.all([
+          getDocs(collection(db, "invitations")),
+          getDocs(collection(db, "users")),
+          getDocs(
+            query(
+              collection(db, "orders"),
+              orderBy("createdAt", "desc"),
+              limit(15)
+            )
+          ),
+          getDocs(
+            query(collection(db, "templates"), orderBy("createdAt", "desc"))
+          ),
+        ]);
 
+      const invitations = invitationsSnap.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as any),
+      }));
+      const users = usersSnap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      const paidOrders = ordersSnap.docs
+        .filter((d) => (d.data() as any).status === "paid")
+        .map((d) => ({ id: d.id, ...(d.data() as any) }));
+      const templates = templatesSnap.docs
+        .filter((d) => (d.data() as any).active === true)
+        .map((d) => ({ id: d.id, ...(d.data() as any) }));
+
+      setData({ invitations, users, paidOrders, templates });
+    } catch (err: any) {
+      console.error(err);
+      setError(err?.message || "Error al cargar datos");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return <div className="text-center py-20 text-ink/60">Cargando panel…</div>;
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-20 text-red-600">
+        Ocurrió un error al cargar el panel: {error}
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const { invitations, users, paidOrders, templates } = data;
   const totalInvitations = invitations.length;
-  const freeCount = invitations.filter((i) => i.tier === "free").length;
-  const premiumCount = invitations.filter((i) => i.tier === "premium").length;
-  const conversionRate = totalInvitations > 0
-    ? ((premiumCount / totalInvitations) * 100).toFixed(1)
-    : "0.0";
+  const freeCount = invitations.filter((i: any) => i.tier === "free").length;
+  const premiumCount = invitations.filter((i: any) => i.tier === "premium").length;
+  const conversionRate =
+    totalInvitations > 0
+      ? ((premiumCount / totalInvitations) * 100).toFixed(1)
+      : "0.0";
 
   const totalUsers = users.length;
-  const adminUsers = users.filter((u) => u.role === "admin").length;
-  const totalRevenue = paidOrders.reduce((sum, o) => sum + (o.amount || 0), 0);
+  const adminUsers = users.filter((u: any) => u.role === "admin").length;
+  const totalRevenue = paidOrders.reduce((sum: number, o: any) => sum + (o.amount || 0), 0);
   const activeTemplates = templates.length;
 
   const recentInvitations = invitations
-    .sort((a, b) => b.createdAt - a.createdAt)
+    .sort((a: any, b: any) => b.createdAt - a.createdAt)
     .slice(0, 5);
 
   const recentOrders = paidOrders.slice(0, 5);
@@ -76,7 +131,7 @@ export default async function AdminDashboard() {
           icon="[star]"
         />
         <KpiCard
-          label="Conversion"
+          label="Conversión"
           value={conversionRate + "%"}
           color="gold"
           icon="[chart]"
@@ -114,14 +169,14 @@ export default async function AdminDashboard() {
         {/* Recent invitations */}
         <section className="card p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-serif text-xl text-ink">Ultimas invitaciones</h2>
+            <h2 className="font-serif text-xl text-ink">Últimas invitaciones</h2>
             <Link href="/admin/pages" className="text-sm text-gold-500 hover:underline">
-              Ver todas -{">"}
+              Ver todas →
             </Link>
           </div>
           <div className="space-y-3">
             {recentInvitations.length === 0 ? (
-              <p className="text-ink/50 text-center py-8">Sin invitaciones aun</p>
+              <p className="text-ink/50 text-center py-8">Sin invitaciones aún</p>
             ) : (
               <div className="space-y-2">
                 {recentInvitations.map((inv) => (
@@ -133,7 +188,8 @@ export default async function AdminDashboard() {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-ink truncate">{inv.title}</p>
                       <p className="text-xs text-ink/50">
-                        {inv.tier === "premium" ? "[star] Premium" : "[free] Free"} . {new Date(inv.createdAt).toLocaleDateString("es-ES")}
+                        {inv.tier === "premium" ? "[star] Premium" : "[free] Free"} ·{" "}
+                        {new Date(inv.createdAt).toLocaleDateString("es-ES")}
                       </p>
                     </div>
                     <span
@@ -155,14 +211,14 @@ export default async function AdminDashboard() {
         {/* Recent paid orders */}
         <section className="card p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-serif text-xl text-ink">Ultimas ventas</h2>
+            <h2 className="font-serif text-xl text-ink">Últimas ventas</h2>
             <Link href="/admin/sales" className="text-sm text-gold-500 hover:underline">
-              Ver CRM -{">"}
+              Ver CRM →
             </Link>
           </div>
           <div className="space-y-2">
             {recentOrders.length === 0 ? (
-              <p className="text-ink/50 text-center py-8">Sin ventas aun</p>
+              <p className="text-ink/50 text-center py-8">Sin ventas aún</p>
             ) : (
               <div className="space-y-2">
                 {recentOrders.map((order) => (
@@ -175,7 +231,7 @@ export default async function AdminDashboard() {
                         {order.id.slice(0, 12)}…
                       </p>
                       <p className="text-xs text-ink/50">
-                        Plan: {order.planId} . {formatPrice(order.amount || 0, "mxn")}
+                        Plan: {order.planId} · {formatPrice(order.amount || 0, "mxn")}
                       </p>
                     </div>
                     <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
@@ -194,7 +250,7 @@ export default async function AdminDashboard() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-serif text-xl text-ink">Plantillas activas</h2>
           <Link href="/admin/templates" className="text-sm text-gold-500 hover:underline">
-            Gestionar -{">"}
+            Gestionar →
           </Link>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -204,6 +260,7 @@ export default async function AdminDashboard() {
               href={`/admin/templates/${tpl.id}`}
               className="card p-3 hover:shadow-md transition"
             >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={tpl.thumbnailUrl}
                 alt={tpl.name}

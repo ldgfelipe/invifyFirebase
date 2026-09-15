@@ -66,13 +66,24 @@ async function main() {
   console.log("✓ Emulador Firestore detectado (localhost:8080)\n");
 
   const envLocal = loadEnvFile(resolve(ROOT, ".env.local"));
-  const mergedEnv = { ...process.env, ...envLocal, NEXT_PUBLIC_EMULATOR: "true" };
+  // NEXT_PUBLIC_EMULATOR hace que el client SDK use los emuladores.
+  // Las variables *_EMULATOR_HOST hacen que el Admin SDK (API routes) también
+  // apunten a los emuladores en lugar del proyecto real.
+  const emulatorEnv = {
+    NEXT_PUBLIC_EMULATOR: "true",
+    FIRESTORE_EMULATOR_HOST: "localhost:8080",
+    FIREBASE_AUTH_EMULATOR_HOST: "localhost:9099",
+    FIREBASE_STORAGE_EMULATOR_HOST: "localhost:9199",
+    FIREBASE_EMULATOR_HUB: "localhost:4400",
+  };
+  const mergedEnv = { ...process.env, ...envLocal, ...emulatorEnv };
 
   const cmd = process.platform === "win32" ? "npx.cmd" : "npx";
   const child = spawn(cmd, ["next", "dev"], {
     cwd: ROOT,
     stdio: "inherit",
     env: mergedEnv,
+    shell: process.platform === "win32",
   });
 
   child.on("close", (code) => process.exit(code ?? 1));

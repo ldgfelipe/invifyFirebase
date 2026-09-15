@@ -12,6 +12,10 @@ build/
 .env.*.local
 env.cloudrun.yaml
 
+# Cuenta de servicio de Firebase (credenciales admin, solo local)
+service-account.json
+.secrets/
+
 # Firebase
 .firebase/
 firebase-debug.log

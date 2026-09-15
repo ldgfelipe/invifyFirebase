@@ -18,6 +18,7 @@ import {
 import type { Order, Invitation, UserProfile, Template, Plan } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { formatPrice } from "@/lib/currency";
+import InvoiceModal from "@/components/admin/InvoiceModal";
 
 export default function AdminSalesPage() {
   const { user } = useAuth();
@@ -29,6 +30,8 @@ export default function AdminSalesPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"orders" | "invitations" | "users">("orders");
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [changing, setChanging] = useState<string | null>(null);
+  const [invoiceOrder, setInvoiceOrder] = useState<Order | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -79,6 +82,19 @@ export default function AdminSalesPage() {
       alert("Error: " + err.message);
     } finally {
       setDeleting(null);
+    }
+  }
+
+  async function updateOrderStatus(orderId: string, status: string) {
+    if (!confirm(`¿Cambiar el pedido ${orderId.slice(0, 12)}… a estado "${status}"?`)) return;
+    setChanging(orderId);
+    try {
+      await updateDoc(doc(db, "orders", orderId), { status });
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: status as Order["status"] } : o)));
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setChanging(null);
     }
   }
 
@@ -185,7 +201,10 @@ export default function AdminSalesPage() {
           orders={orders}
           enrichedPending={enrichedPending}
           deleting={deleting}
+          changing={changing}
           onDelete={deleteOrder}
+          onChangeStatus={updateOrderStatus}
+          onInvoice={(o) => setInvoiceOrder(o)}
           onExportCSV={exportPendingCSV}
           userMap={userMap}
           templateMap={templateMap}
@@ -199,6 +218,14 @@ export default function AdminSalesPage() {
 
       {activeTab === "users" && (
         <UserTable users={users} orders={orders} invitations={invitations} />
+      )}
+
+      {invoiceOrder && (
+        <InvoiceModal
+          order={invoiceOrder}
+          user={invoiceOrder.uid ? userMap.get(invoiceOrder.uid) : null}
+          onClose={() => setInvoiceOrder(null)}
+        />
       )}
     </div>
   );
@@ -223,7 +250,10 @@ function OrderTable({
   orders,
   enrichedPending,
   deleting,
+  changing,
   onDelete,
+  onChangeStatus,
+  onInvoice,
   onExportCSV,
   userMap,
   templateMap,
@@ -232,7 +262,10 @@ function OrderTable({
   orders: Order[];
   enrichedPending: (Order & { userEmail: string; userName: string; templateName: string; planName: string })[];
   deleting: string | null;
+  changing: string | null;
   onDelete: (id: string) => void;
+  onChangeStatus: (id: string, status: string) => void;
+  onInvoice: (o: Order) => void;
   onExportCSV: () => void;
   userMap: Map<string, UserProfile>;
   templateMap: Map<string, Template>;
@@ -279,11 +312,25 @@ function OrderTable({
                     <td className="py-3 px-4 text-sm">{o.templateName}</td>
                     <td className="py-3 px-4">{formatPrice(o.amount || 0, o.currency as "mxn" | "usd" | "eur")}</td>
                     <td className="py-3 px-4 text-ink/60">{new Date(o.createdAt).toLocaleString()}</td>
-                    <td className="py-3 px-4 text-right">
+                    <td className="py-3 px-4 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => onChangeStatus(o.id, "paid")}
+                        disabled={changing === o.id}
+                        className="btn-outline text-sm px-3 py-1 text-green-600 hover:bg-green-50 mr-1"
+                      >
+                        Marcar pagado
+                      </button>
+                      <button
+                        onClick={() => onChangeStatus(o.id, "failed")}
+                        disabled={changing === o.id}
+                        className="btn-outline text-sm px-3 py-1 text-red-600 hover:bg-red-50 mr-1"
+                      >
+                        Marcar fallido
+                      </button>
                       <button
                         onClick={() => onDelete(o.id)}
                         disabled={deleting === o.id}
-                        className="btn-outline text-sm px-3 py-1 text-red-600 hover:bg-red-50"
+                        className="btn-outline text-sm px-3 py-1 text-ink/50 hover:bg-ink/5"
                       >
                         {deleting === o.id ? "Eliminando…" : "Eliminar"}
                       </button>
@@ -313,6 +360,7 @@ function OrderTable({
                 <th>Invitación</th>
                 <th>Monto</th>
                 <th>Fecha</th>
+                <th className="text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -329,6 +377,21 @@ function OrderTable({
                     <td className="py-3 px-4">{o.invitationId ? o.invitationId.slice(0, 8) + "…" : "—"}</td>
                     <td className="py-3 px-4">{formatPrice(o.amount || 0, o.currency as "mxn" | "usd" | "eur")}</td>
                     <td className="py-3 px-4 text-ink/60">{new Date(o.createdAt).toLocaleString()}</td>
+                    <td className="py-3 px-4 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => onInvoice(o)}
+                        className="btn-outline text-sm px-3 py-1 mr-1"
+                      >
+                        Factura
+                      </button>
+                      <button
+                        onClick={() => onChangeStatus(o.id, "canceled")}
+                        disabled={changing === o.id}
+                        className="btn-outline text-sm px-3 py-1 text-ink/50 hover:bg-ink/5"
+                      >
+                        {changing === o.id ? "…" : "Cancelar"}
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
@@ -350,6 +413,7 @@ function OrderTable({
                   <th>Plan</th>
                   <th>Motivo</th>
                   <th>Fecha</th>
+                  <th className="text-right">Acciones</th>
                 </tr>
               </thead>
               <tbody>
@@ -362,6 +426,15 @@ function OrderTable({
                       <td className="py-3 px-4">{o.planId}</td>
                       <td className="py-3 px-4 text-red-600">Pago fallido / expirado</td>
                       <td className="py-3 px-4 text-ink/60">{new Date(o.createdAt).toLocaleString()}</td>
+                      <td className="py-3 px-4 text-right whitespace-nowrap">
+                        <button
+                          onClick={() => onChangeStatus(o.id, "paid")}
+                          disabled={changing === o.id}
+                          className="btn-outline text-sm px-3 py-1 text-green-600 hover:bg-green-50"
+                        >
+                          {changing === o.id ? "…" : "Marcar pagado"}
+                        </button>
+                      </td>
                     </tr>
                   );
                 })}
