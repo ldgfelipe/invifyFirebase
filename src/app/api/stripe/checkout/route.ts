@@ -63,9 +63,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Price ID ${isTest ? "test" : "live"} no configurado para este plan` }, { status: 400 });
   }
 
+  const isSubscription = !!plan.interval && plan.interval !== "one_time";
   const origin = getOrigin(req);
   const session = await stripe.checkout.sessions.create({
-    mode: "payment",
+    mode: isSubscription ? "subscription" : "payment",
     customer_email: email,
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${origin}/dashboard?session_id={CHECKOUT_SESSION_ID}`,

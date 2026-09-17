@@ -1,8 +1,10 @@
 "use client";
 
 // ============================================================================
-// ADMIN / PLANES - CRUD de /plans (solo admin).
-// Estos docs se muestran en /pricing y se usan en el checkout de Stripe.
+// ADMIN / PLANES - CRUD de /plans + sincronización automática con Stripe.
+// "Guardar y sincronizar" crea/actualiza el Plan y los Product+Price de Stripe
+// (test y live si hay claves configuradas) en un solo clic, sin escribir
+// price_xxx a mano.
 // ============================================================================
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
@@ -18,6 +20,15 @@ import {
 } from "firebase/firestore";
 import type { Plan } from "@/lib/types";
 import { formatPrice } from "@/lib/currency";
+import { cn } from "@/lib/cn";
+
+const INTERVALS: Array<"one_time" | "day" | "week" | "month" | "year"> = [
+  "one_time",
+  "day",
+  "week",
+  "month",
+  "year",
+];
 
 export default function AdminPlans() {
   const { user } = useAuth();
@@ -27,7 +38,7 @@ export default function AdminPlans() {
   const [featuresText, setFeaturesText] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [creatingPrice, setCreatingPrice] = useState<"test" | "live" | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   async function load() {
     const snap = await getDocs(query(collection(db, "plans"), orderBy("price", "asc")));
@@ -40,173 +51,138 @@ export default function AdminPlans() {
 
   function startNew() {
     setEditing(null);
-    setForm({ name: "", price: 0, currency: "mxn", stripePriceId: "", stripePriceIdTest: "", stripePriceIdLive: "", stripeProductId: "" });
+    setForm({
+      name: "",
+      price: 0,
+      currency: "mxn",
+      interval: "one_time",
+      features: [],
+      stripePriceId: "",
+      stripePriceIdTest: "",
+      stripePriceIdLive: "",
+    });
     setFeaturesText("");
     setErr(null);
     setMsg(null);
   }
   function startEdit(p: Plan) {
     setEditing(p);
-    setForm({
-      id: p.id,
-      name: p.name,
-      price: p.price,
-      currency: p.currency,
-      stripePriceId: p.stripePriceId,
-      stripePriceIdTest: p.stripePriceIdTest,
-      stripePriceIdLive: p.stripePriceIdLive,
-      stripeProductId: p.stripeProductId,
-    });
-    setFeaturesText(p.features.join("\n"));
+    setForm({ ...p });
+    setFeaturesText((p.features ?? []).join("\n"));
     setErr(null);
     setMsg(null);
   }
 
-  async function save() {
-    setErr(null);
-    setMsg(null);
-    // Validar que al menos haya un price ID (test o live)
-    if (!form.name || (!form.stripePriceIdTest && !form.stripePriceIdLive && !form.stripePriceId)) {
-      setErr("Nombre y al menos un Stripe Price ID (test o live) son obligatorios.");
-      return;
-    }
-    const features = featuresText
+  function buildPlanId(): string {
+    return editing?.id ?? doc(collection(db, "plans")).id;
+  }
+
+  function parseFeatures(): string[] {
+    return featuresText
       .split("\n")
       .map((f) => f.trim())
       .filter(Boolean);
-    const id = editing?.id ?? doc(collection(db, "plans")).id;
+  }
+
+  async function saveOnly() {
+    setErr(null);
+    setMsg(null);
+    if (!form.name) {
+      setErr("El nombre es obligatorio.");
+      return;
+    }
+    const id = buildPlanId();
     const data: Plan = {
       id,
       name: form.name!,
       price: Number(form.price ?? 0),
       currency: form.currency ?? "mxn",
-      features,
+      interval: form.interval ?? "one_time",
+      features: parseFeatures(),
       stripePriceId: form.stripePriceId || form.stripePriceIdTest || form.stripePriceIdLive || "",
-      stripePriceIdTest: form.stripePriceIdTest,
-      stripePriceIdLive: form.stripePriceIdLive,
-      stripeProductId: form.stripeProductId,
+      stripePriceIdTest: form.stripePriceIdTest ?? "",
+      stripePriceIdLive: form.stripePriceIdLive ?? "",
+      stripeProductId: form.stripeProductId ?? "",
+      stripeProductIdTest: form.stripeProductIdTest ?? "",
+      stripeProductIdLive: form.stripeProductIdLive ?? "",
     };
     await setDoc(doc(db, "plans", id), data);
     setMsg("Plan guardado.");
     await load();
-    startNew();
+  }
+
+  async function saveAndSync() {
+    setErr(null);
+    setMsg(null);
+    if (!form.name || !form.price) {
+      setErr("Nombre y precio son obligatorios para sincronizar con Stripe.");
+      return;
+    }
+    setSyncing(true);
+    try {
+      const id = buildPlanId();
+      const token = await user!.getIdToken();
+
+      // 1. Guardar plan local (sin borrar price IDs ya existentes).
+      const data: Plan = {
+        id,
+        name: form.name!,
+        price: Number(form.price ?? 0),
+        currency: form.currency ?? "mxn",
+        interval: form.interval ?? "one_time",
+        features: parseFeatures(),
+        stripePriceId: form.stripePriceId || form.stripePriceIdTest || form.stripePriceIdLive || "",
+        stripePriceIdTest: form.stripePriceIdTest ?? "",
+        stripePriceIdLive: form.stripePriceIdLive ?? "",
+        stripeProductId: form.stripeProductId ?? "",
+        stripeProductIdTest: form.stripeProductIdTest ?? "",
+        stripeProductIdLive: form.stripeProductIdLive ?? "",
+      };
+      await setDoc(doc(db, "plans", id), data);
+
+      // 2. Sincronizar con Stripe (test/live según claves configuradas).
+      const res = await fetch("/api/admin/stripe-prices/sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          planId: id,
+          name: form.name,
+          amount: Number(form.price),
+          price: Number(form.price),
+          currency: form.currency ?? "mxn",
+          interval: form.interval ?? "one_time",
+          features: data.features,
+        }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error ?? "Error sincronizando con Stripe");
+
+      const syncedModes = result.modes?.length
+        ? result.modes.map((m: string) => (m === "test" ? "Test" : "Live")).join(" y ")
+        : "ninguno";
+      const details = result.syncResults
+        ? Object.entries(result.syncResults)
+            .map(([m, v]: [string, any]) => `${m}: ${v.created ? "creado" : "ya existente"} (${v.priceId})`)
+            .join(" · ")
+        : "";
+      setMsg(`Plan sincronizado con Stripe (${syncedModes}). ${details}${result.note ? " " + result.note : ""}`);
+
+      await load();
+      setEditing(null);
+    } catch (err: any) {
+      setErr(err.message);
+    } finally {
+      setSyncing(false);
+    }
   }
 
   async function remove(p: Plan) {
     if (!confirm(`¿Eliminar el plan "${p.name}"?`)) return;
     await deleteDoc(doc(db, "plans", p.id));
     await load();
-  }
-
-  async function createStripePrice(mode: "test" | "live") {
-    if (!form.name || !form.price) {
-      setErr("Nombre y precio son obligatorios para crear el price en Stripe.");
-      return;
-    }
-    setCreatingPrice(mode);
-    setErr(null);
-    try {
-      const token = await user!.getIdToken();
-      const res = await fetch("/api/admin/stripe-prices", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          planName: form.name,
-          amount: Number(form.price),
-          currency: form.currency ?? "mxn",
-          interval: "month",
-          mode,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Error creando price en Stripe");
-
-      // Actualiza el campo correspondiente + productId
-      setForm((prev) => ({
-        ...prev,
-        [mode === "test" ? "stripePriceIdTest" : "stripePriceIdLive"]: data.priceId,
-        stripeProductId: data.productId,
-      }));
-      setMsg(`Price ${mode} creado: ${data.priceId} (product: ${data.productId})`);
-    } catch (err: any) {
-      setErr(err.message);
-    } finally {
-      setCreatingPrice(null);
-    }
-  }
-
-  async function updateStripePrice(mode: "test" | "live") {
-    const priceId = mode === "test" ? form.stripePriceIdTest : form.stripePriceIdLive;
-    if (!priceId) {
-      setErr(`No hay Price ID ${mode} para actualizar.`);
-      return;
-    }
-    setCreatingPrice(mode);
-    setErr(null);
-    try {
-      const token = await user!.getIdToken();
-      const res = await fetch(`/api/admin/stripe-prices/update`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          priceId,
-          productId: form.stripeProductId, // opcional
-          planName: form.name,
-          amount: Number(form.price),
-          currency: form.currency ?? "mxn",
-          interval: "month",
-          mode,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Error actualizando price en Stripe");
-      setMsg(`Price ${mode} actualizado (metadata). Nota: monto/moneda/intervalo no se pueden cambiar en price existente.`);
-    } catch (err: any) {
-      setErr(err.message);
-    } finally {
-      setCreatingPrice(null);
-    }
-  }
-
-  async function deleteStripePrice(mode: "test" | "live") {
-    const priceId = mode === "test" ? form.stripePriceIdTest : form.stripePriceIdLive;
-    const productId = form.stripeProductId; // opcional
-    if (!priceId) {
-      setErr(`No hay Price ID ${mode} para eliminar.`);
-      return;
-    }
-    if (!confirm(`¿Archivar Price ${mode} (${priceId})? Se desactivará en Stripe.`)) return;
-    setCreatingPrice(mode);
-    setErr(null);
-    try {
-      const token = await user!.getIdToken();
-      const res = await fetch(`/api/admin/stripe-prices/delete`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ priceId, productId, mode }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Error eliminando price en Stripe");
-      // Limpia el campo en el formulario
-      setForm((prev) => ({
-        ...prev,
-        [mode === "test" ? "stripePriceIdTest" : "stripePriceIdLive"]: "",
-      }));
-      setMsg(`Price ${mode} archivado en Stripe.`);
-    } catch (err: any) {
-      setErr(err.message);
-    } finally {
-      setCreatingPrice(null);
-    }
   }
 
   return (
@@ -219,28 +195,61 @@ export default function AdminPlans() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Lista con estado de sincronización */}
         <div className="space-y-3">
-          {items.map((p) => (
-            <div key={p.id} className="card p-4 flex items-center justify-between">
-              <div>
-                <p className="font-serif text-lg text-ink">{p.name}</p>
-                <p className="text-xs text-ink/50">
-                  {formatPrice(p.price, p.currency as "mxn" | "usd" | "eur")} · {p.features.length} features
-                </p>
+          {items.map((p) => {
+            const hasTest = Boolean(p.stripePriceIdTest);
+            const hasLive = Boolean(p.stripePriceIdLive);
+            return (
+              <div key={p.id} className="card p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-serif text-lg text-ink">{p.name}</p>
+                    <p className="text-xs text-ink/50">
+                      {formatPrice(p.price, (p.currency as "mxn" | "usd" | "eur") || "mxn")} ·{" "}
+                      {p.interval === "one_time" || !p.interval
+                        ? "pago único"
+                        : p.interval === "year"
+                          ? "anual"
+                          : p.interval === "month"
+                            ? "mensual"
+                            : p.interval === "week"
+                              ? "semanal"
+                              : "diario"} ·{" "}
+                      {p.features?.length ?? 0} features
+                    </p>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0">
+                    <button onClick={() => startEdit(p)} className="btn-outline text-sm px-3 py-1">
+                      Editar
+                    </button>
+                    <button onClick={() => remove(p)} className="btn-outline text-sm px-3 py-1 text-red-600">
+                      Eliminar
+                    </button>
+                  </div>
+                </div>
+                {/* Estado Stripe */}
+                <div className="mt-3 space-y-1 text-xs">
+                  <div className="flex items-center gap-2">
+                    <StatusDot ok={hasTest} />
+                    <span className="text-ink/60">
+                      Test: {hasTest ? <code>{p.stripePriceIdTest}</code> : "sin precio"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <StatusDot ok={hasLive} />
+                    <span className="text-ink/60">
+                      Live: {hasLive ? <code>{p.stripePriceIdLive}</code> : "sin precio"}
+                    </span>
+                  </div>
+                </div>
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => startEdit(p)} className="btn-outline text-sm px-3 py-1">
-                  Editar
-                </button>
-                <button onClick={() => remove(p)} className="btn-outline text-sm px-3 py-1 text-red-600">
-                  Eliminar
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
           {items.length === 0 && <p className="text-ink/50 text-sm">Aún no hay planes.</p>}
         </div>
 
+        {/* Formulario */}
         <div className="card p-6 space-y-4">
           <h2 className="font-serif text-xl text-ink">
             {editing ? "Editar plan" : "Nuevo plan"}
@@ -255,107 +264,42 @@ export default function AdminPlans() {
             <input
               className="input"
               type="number"
-              placeholder="Precio en centavos"
+              placeholder="Precio en centavos (ej. 49000)"
               value={form.price ?? 0}
               onChange={(e) => setForm({ ...form, price: Number(e.target.value) })}
             />
             <input
-              className="input w-28"
+              className="input w-24"
               placeholder="mxn"
               value={form.currency ?? "mxn"}
               onChange={(e) => setForm({ ...form, currency: e.target.value })}
             />
+            <select
+              className="input w-32"
+              value={form.interval ?? "one_time"}
+              onChange={(e) => setForm({ ...form, interval: e.target.value as Plan["interval"] })}
+            >
+              {INTERVALS.map((i) => (
+                <option key={i} value={i}>
+                  {i === "one_time"
+                    ? "Pago único"
+                    : i === "day"
+                      ? "Diario"
+                      : i === "week"
+                        ? "Semanal"
+                        : i === "month"
+                          ? "Mensual"
+                          : "Anual"}
+                </option>
+              ))}
+            </select>
           </div>
+          <p className="text-xs text-ink/50 -mt-2">
+            El precio es en centavos (49000 = $490.00). <strong>Pago único</strong> no necesita
+            productos/precios de Stripe: se cobra directo con Stripe, PayPal o Mercado Pago.
+            Si eliges un intervalo recurrente (suscripción), usa «Guardar y sincronizar con Stripe» para crear el Price.
+          </p>
 
-          {/* Stripe Price IDs - Test / Live */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm text-ink/70 block mb-1">Stripe Price ID Test (price_xxx)</label>
-              <div className="flex flex-wrap gap-2">
-                <input
-                  className="input flex-1 min-w-0"
-                  placeholder="price_test_xxx"
-                  value={form.stripePriceIdTest ?? ""}
-                  onChange={(e) => setForm({ ...form, stripePriceIdTest: e.target.value })}
-                />
-                <button
-                  type="button"
-                  onClick={() => createStripePrice("test")}
-                  disabled={creatingPrice === "test" || !form.name || !form.price}
-                  className="btn-outline whitespace-nowrap"
-                >
-                  {creatingPrice === "test" ? "Creando…" : "Crear en Stripe Test"}
-                </button>
-                {form.stripePriceIdTest && (
-                  <React.Fragment>
-                    <button
-                      type="button"
-                      onClick={() => updateStripePrice("test")}
-                      disabled={creatingPrice === "test"}
-                      className="btn-outline whitespace-nowrap"
-                    >
-                      Actualizar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => deleteStripePrice("test")}
-                      disabled={creatingPrice === "test"}
-                      className="btn-outline whitespace-nowrap text-red-600 hover:bg-red-50 border-red-200"
-                    >
-                      Archivar
-                    </button>
-                  </React.Fragment>
-                )}
-              </div>
-            </div>
-            <div>
-              <label className="text-sm text-ink/70 block mb-1">Stripe Price ID Live (price_xxx)</label>
-              <div className="flex flex-wrap gap-2">
-                <input
-                  className="input flex-1"
-                  placeholder="price_live_xxx"
-                  value={form.stripePriceIdLive ?? ""}
-                  onChange={(e) => setForm({ ...form, stripePriceIdLive: e.target.value })}
-                />
-                <button
-                  type="button"
-                  onClick={() => createStripePrice("live")}
-                  disabled={creatingPrice === "live" || !form.name || !form.price}
-                  className="btn-primary whitespace-nowrap"
-                >
-                  {creatingPrice === "live" ? "Creando…" : "Crear en Stripe Live"}
-                </button>
-                {form.stripePriceIdLive && (
-                  <React.Fragment>
-                    <button
-                      type="button"
-                      onClick={() => updateStripePrice("live")}
-                      disabled={creatingPrice === "live"}
-                      className="btn-outline whitespace-nowrap"
-                    >
-                      Actualizar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => deleteStripePrice("live")}
-                      disabled={creatingPrice === "live"}
-                      className="btn-outline whitespace-nowrap text-red-600 hover:bg-red-50 border-red-200"
-                    >
-                      Archivar
-                    </button>
-                  </React.Fragment>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Legacy single field (para compatibilidad) */}
-          <input
-            className="input"
-            placeholder="Stripe Price ID (price_xxx) - Legacy"
-            value={form.stripePriceId ?? ""}
-            onChange={(e) => setForm({ ...form, stripePriceId: e.target.value })}
-          />
           <div>
             <label className="text-sm text-ink/70">Features (una por línea)</label>
             <textarea
@@ -364,11 +308,34 @@ export default function AdminPlans() {
               onChange={(e) => setFeaturesText(e.target.value)}
             />
           </div>
+
+          {form.stripePriceIdTest || form.stripePriceIdLive ? (
+            <div className="text-xs text-ink/50 bg-ink/5 rounded-lg p-3 space-y-1">
+              {form.stripePriceIdTest && (
+                <p><span className="text-ink/60">Test:</span> <code>{form.stripePriceIdTest}</code></p>
+              )}
+              {form.stripePriceIdLive && (
+                <p><span className="text-ink/60">Live:</span> <code>{form.stripePriceIdLive}</code></p>
+              )}
+              <p className="italic">
+                No edites los IDs a mano: usa «Guardar y sincronizar» y se generan solos.
+              </p>
+            </div>
+          ) : null}
+
           {err && <p className="text-red-600 text-sm">{err}</p>}
-          {msg && <p className="text-gold-500 text-sm">{msg}</p>}
-          <div className="flex gap-3">
-            <button onClick={save} className="btn-primary">
-              Guardar
+          {msg && <p className="text-gold-500 text-sm break-all">{msg}</p>}
+
+          <div className="flex gap-3 flex-wrap">
+            <button
+              onClick={saveAndSync}
+              disabled={syncing}
+              className="btn-primary"
+            >
+              {syncing ? "Sincronizando con Stripe…" : "Guardar y sincronizar con Stripe"}
+            </button>
+            <button onClick={saveOnly} disabled={syncing} className="btn-outline">
+              Guardar sin Stripe
             </button>
             {editing && (
               <button onClick={startNew} className="btn-outline">
@@ -379,5 +346,16 @@ export default function AdminPlans() {
         </div>
       </div>
     </div>
+  );
+}
+
+function StatusDot({ ok }: { ok: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-block w-2 h-2 rounded-full flex-shrink-0",
+        ok ? "bg-green-500" : "bg-ink/20"
+      )}
+    />
   );
 }

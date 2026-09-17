@@ -3,6 +3,7 @@
 // la plantilla preseleccionada desde la URL (?template=ID).
 // ============================================================================
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { serverDb } from "@/lib/firebase/serverClient";
 import type { Plan } from "@/lib/types";
@@ -25,5 +26,9 @@ export default async function PricingPage({
   const snap = await getDocs(query(collection(serverDb, "plans"), orderBy("price", "asc")));
   const plans = snap.docs.map((d) => d.data() as Plan);
 
-  return <PricingFlow plans={plans} templateId={searchParams.template} />;
+  return (
+    <Suspense fallback={<div className="text-center py-20 text-ink/60">Cargando…</div>}>
+      <PricingFlow plans={plans} templateId={searchParams.template} />
+    </Suspense>
+  );
 }

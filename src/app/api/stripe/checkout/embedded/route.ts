@@ -1,19 +1,14 @@
 // ============================================================================
-// API /api/stripe/checkout/embedded - Crea un PaymentIntent para
-// Stripe Elements (embedded). Devuelve client_secret para PaymentElement.
+// API /api/stripe/checkout/embedded - Legado (ya no lo usa la UI).
+// Crea un PaymentIntent directo con amount+currency: NO requiere Productos/
+// Precios de Stripe. Para el flujo actual usa /api/payments/checkout.
 // ============================================================================
 import { NextRequest, NextResponse } from "next/server";
-import { getStripe } from "@/lib/stripe";
+import Stripe from "stripe";
 import { adminDb, adminAuth } from "@/lib/firebase/admin";
-import { log, LogHelper } from "@/lib/logging";
+import { getProviderCredentials, hasCredentials } from "@/lib/payments/config";
 
-function getOrigin(req: NextRequest): string {
-  const forwarded = req.headers.get("x-forwarded-host");
-  const host = forwarded ?? req.headers.get("host") ?? "";
-  const proto = req.headers.get("x-forwarded-proto") ?? (host.includes("localhost") ? "http" : "https");
-  if (host) return `${proto}://${host}`;
-  return process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-}
+export const runtime = "nodejs";
 
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get("authorization") ?? "";
@@ -39,44 +34,50 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Plan no encontrado" }, { status: 404 });
   }
   const plan = planSnap.data() as any;
+  if (!plan.price || !plan.currency) {
+    return NextResponse.json({ error: "Plan sin precio o moneda" }, { status: 400 });
+  }
+  if (plan.interval && plan.interval !== "one_time") {
+    return NextResponse.json(
+      { error: "Suscripciones: usa /api/payments/checkout (flujo hosted)." },
+      { status: 400 }
+    );
+  }
+
+  const creds = await getProviderCredentials("stripe", isTest ? "test" : "live");
+  if (!hasCredentials("stripe", creds) || !creds.secretKey) {
+    return NextResponse.json({ error: "No hay credenciales Stripe configuradas" }, { status: 400 });
+  }
+  const stripe = new Stripe(creds.secretKey, { apiVersion: "2023-10-16" });
 
   const orderRef = adminDb.collection("orders").doc();
   await orderRef.set({
     id: orderRef.id,
     uid,
     planId,
-    templateId,
+    templateId: templateId ?? null,
     invitationId: null,
     status: "pending",
-    stripePaymentIntentId: "",
+    provider: "stripe",
+    mode: isTest ? "test" : "live",
     amount: plan.price,
+    currency: plan.currency,
     createdAt: Date.now(),
   });
 
-  const stripe = await getStripe(isTest ? "test" : "live");
-
-  // Usar el Price ID correspondiente al modo
-  const priceId = isTest ? plan.stripePriceIdTest : plan.stripePriceIdLive;
-  if (!priceId) {
-    return NextResponse.json({ error: `Price ID ${isTest ? "test" : "live"} no configurado para este plan` }, { status: 400 });
-  }
-
   const paymentIntent = await stripe.paymentIntents.create({
     amount: plan.price,
-    currency: plan.currency ?? "mxn",
-    receipt_email: email,
+    currency: plan.currency.toLowerCase(),
+    receipt_email: email || undefined,
     automatic_payment_methods: { enabled: true },
-    metadata: {
-      orderId: orderRef.id,
-      uid,
-      templateId: templateId ?? "",
-    },
+    metadata: { orderId: orderRef.id, uid, templateId: templateId ?? "" },
   });
 
-  await orderRef.update({ stripePaymentIntentId: paymentIntent.id });
+  await orderRef.update({ providerRef: paymentIntent.id });
 
-  // Log de auditoría
-  await LogHelper.orderCreated(orderRef.id, uid, planId, plan.price);
-
-  return NextResponse.json({ clientSecret: paymentIntent.client_secret });
+  return NextResponse.json({
+    clientSecret: paymentIntent.client_secret,
+    publishableKey: creds.publishableKey,
+    orderId: orderRef.id,
+  });
 }

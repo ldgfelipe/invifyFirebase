@@ -97,9 +97,12 @@ export interface Plan {
   currency: string;
   features: string[];
   stripePriceId: string; // legacy
+  interval?: "one_time" | "day" | "week" | "month" | "year";
   stripePriceIdTest?: string;
   stripePriceIdLive?: string;
-  stripeProductId?: string; // para delete/update en Stripe
+  stripeProductId?: string; // legacy
+  stripeProductIdTest?: string;
+  stripeProductIdLive?: string;
 }
 
 export interface Order {
@@ -109,6 +112,9 @@ export interface Order {
   templateId?: string;
   invitationId: string | null;
   status: "pending" | "paid" | "failed" | "canceled";
+  provider?: "stripe" | "paypal" | "mercadopago";
+  mode?: "test" | "live";
+  providerRef?: string; // payment_intent/session/orden paypal/payment mp
   stripeSessionId: string;
   stripePaymentIntentId?: string;
   amount?: number; // en centavos

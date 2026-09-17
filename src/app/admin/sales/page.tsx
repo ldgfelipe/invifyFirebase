@@ -32,6 +32,8 @@ export default function AdminSalesPage() {
   const [deleting, setDeleting] = useState<string | null>(null);
   const [changing, setChanging] = useState<string | null>(null);
   const [invoiceOrder, setInvoiceOrder] = useState<Order | null>(null);
+  const [providerFilter, setProviderFilter] = useState<"" | "stripe" | "paypal" | "mercadopago">("");
+  const [pendingProviders, setPendingProviders] = useState<Record<string, "stripe" | "paypal" | "mercadopago">>({});
 
   useEffect(() => {
     if (!user) return;
@@ -85,12 +87,14 @@ export default function AdminSalesPage() {
     }
   }
 
-  async function updateOrderStatus(orderId: string, status: string) {
+  async function updateOrderStatus(orderId: string, status: string, provider?: "stripe" | "paypal" | "mercadopago") {
     if (!confirm(`¿Cambiar el pedido ${orderId.slice(0, 12)}… a estado "${status}"?`)) return;
     setChanging(orderId);
     try {
-      await updateDoc(doc(db, "orders", orderId), { status });
-      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: status as Order["status"] } : o)));
+      const updates: { status: string; provider?: "stripe" | "paypal" | "mercadopago" } = { status };
+      if (status === "paid" && provider) updates.provider = provider;
+      await updateDoc(doc(db, "orders", orderId), updates);
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status: status as Order["status"], ...(status === "paid" && provider ? { provider } : {}) } : o)));
     } catch (err: any) {
       alert("Error: " + err.message);
     } finally {
@@ -126,6 +130,11 @@ export default function AdminSalesPage() {
       currency: o.currency || "mxn",
     };
   });
+
+  // Filtro por proveedor de pago
+  const filteredOrders = providerFilter
+    ? orders.filter((o) => o.provider === providerFilter)
+    : orders;
 
   // Export CSV
   function exportPendingCSV() {
@@ -196,10 +205,33 @@ export default function AdminSalesPage() {
         <StatCard label="Fallidos" value={failedCount} color="red" />
       </div>
 
+      {/* Filtro por proveedor de pago */}
+      <div className="flex items-center gap-2 mb-6">
+        <span className="text-sm text-ink/60">Medio de pago:</span>
+        {[
+          { id: "" as const, label: "Todos" },
+          { id: "stripe" as const, label: "💳 Stripe" },
+          { id: "mercadopago" as const, label: "💚 Mercado Pago" },
+          { id: "paypal" as const, label: "🅿️ PayPal" },
+        ].map((opt) => (
+          <button
+            key={opt.id || "all"}
+            onClick={() => setProviderFilter(opt.id)}
+            className={`px-3 py-1.5 text-sm rounded-lg border transition ${
+              providerFilter === opt.id
+                ? "bg-gold-500 text-white border-gold-500"
+                : "border-ink/10 text-ink/60 hover:border-ink/20 hover:text-ink/80"
+            }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       {activeTab === "orders" && (
         <OrderTable
-          orders={orders}
-          enrichedPending={enrichedPending}
+          orders={filteredOrders}
+          enrichedPending={enrichedPending.filter((o) => !providerFilter || o.provider === providerFilter)}
           deleting={deleting}
           changing={changing}
           onDelete={deleteOrder}
@@ -209,6 +241,8 @@ export default function AdminSalesPage() {
           userMap={userMap}
           templateMap={templateMap}
           planMap={planMap}
+          pendingProviders={pendingProviders}
+          onProviderChange={(id, p) => setPendingProviders((prev) => ({ ...prev, [id]: p }))}
         />
       )}
 
@@ -229,6 +263,13 @@ export default function AdminSalesPage() {
       )}
     </div>
   );
+}
+
+function providerLabel(provider?: "stripe" | "paypal" | "mercadopago"): string {
+  if (provider === "paypal") return "🅿️ PayPal";
+  if (provider === "mercadopago") return "💚 Mercado Pago";
+  if (provider === "stripe") return "💳 Stripe";
+  return "—";
 }
 
 function StatCard({ label, value, color }: { label: string; value: number | string; color: string }) {
@@ -258,18 +299,22 @@ function OrderTable({
   userMap,
   templateMap,
   planMap,
+  pendingProviders,
+  onProviderChange,
 }: {
   orders: Order[];
   enrichedPending: (Order & { userEmail: string; userName: string; templateName: string; planName: string })[];
   deleting: string | null;
   changing: string | null;
   onDelete: (id: string) => void;
-  onChangeStatus: (id: string, status: string) => void;
+  onChangeStatus: (id: string, status: string, provider?: "stripe" | "paypal" | "mercadopago") => void;
   onInvoice: (o: Order) => void;
   onExportCSV: () => void;
   userMap: Map<string, UserProfile>;
   templateMap: Map<string, Template>;
   planMap: Map<string, Plan>;
+  pendingProviders: Record<string, "stripe" | "paypal" | "mercadopago">;
+  onProviderChange: (id: string, provider: "stripe" | "paypal" | "mercadopago") => void;
 }) {
   const pendingOrders = orders.filter((o) => o.status === "pending");
   const paidOrders = orders.filter((o) => o.status === "paid");
@@ -296,6 +341,7 @@ function OrderTable({
                   <th>Plan</th>
                   <th>Plantilla</th>
                   <th>Monto</th>
+                  <th>Medio de pago</th>
                   <th>Creado</th>
                   <th className="text-right">Acciones</th>
                 </tr>
@@ -311,12 +357,25 @@ function OrderTable({
                     <td className="py-3 px-4 text-sm">{o.planName}</td>
                     <td className="py-3 px-4 text-sm">{o.templateName}</td>
                     <td className="py-3 px-4">{formatPrice(o.amount || 0, o.currency as "mxn" | "usd" | "eur")}</td>
+                    <td className="py-3 px-4">
+                      <select
+                        value={pendingProviders[o.id] ?? o.provider ?? ""}
+                        onChange={(e) => onProviderChange(o.id, e.target.value as "stripe" | "paypal" | "mercadopago")}
+                        className="input text-sm py-1"
+                      >
+                        <option value="">Elegir…</option>
+                        <option value="stripe">💳 Stripe</option>
+                        <option value="mercadopago">💚 Mercado Pago</option>
+                        <option value="paypal">🅿️ PayPal</option>
+                      </select>
+                    </td>
                     <td className="py-3 px-4 text-ink/60">{new Date(o.createdAt).toLocaleString()}</td>
                     <td className="py-3 px-4 text-right whitespace-nowrap">
                       <button
-                        onClick={() => onChangeStatus(o.id, "paid")}
-                        disabled={changing === o.id}
-                        className="btn-outline text-sm px-3 py-1 text-green-600 hover:bg-green-50 mr-1"
+                        onClick={() => onChangeStatus(o.id, "paid", pendingProviders[o.id] ?? o.provider)}
+                        disabled={changing === o.id || !(pendingProviders[o.id] ?? o.provider)}
+                        title={!(pendingProviders[o.id] ?? o.provider) ? "Selecciona el medio de pago" : undefined}
+                        className="btn-outline text-sm px-3 py-1 text-green-600 hover:bg-green-50 mr-1 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         Marcar pagado
                       </button>
@@ -353,14 +412,15 @@ function OrderTable({
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-ink/60 border-b border-ink/10">
-                <th className="py-3 px-4">Order ID</th>
-                <th>Email</th>
-                <th>Plan</th>
-                <th>Plantilla</th>
-                <th>Invitación</th>
-                <th>Monto</th>
-                <th>Fecha</th>
-                <th className="text-right">Acciones</th>
+<th className="py-3 px-4">Order ID</th>
+                  <th>Email</th>
+                  <th>Plan</th>
+                  <th>Plantilla</th>
+                  <th>Invitación</th>
+                  <th>Monto</th>
+                  <th>Medio de pago</th>
+                  <th>Fecha</th>
+                  <th className="text-right">Acciones</th>
               </tr>
             </thead>
             <tbody>
@@ -376,6 +436,9 @@ function OrderTable({
                     <td className="py-3 px-4">{tpl?.name || o.templateId || "—"}</td>
                     <td className="py-3 px-4">{o.invitationId ? o.invitationId.slice(0, 8) + "…" : "—"}</td>
                     <td className="py-3 px-4">{formatPrice(o.amount || 0, o.currency as "mxn" | "usd" | "eur")}</td>
+                    <td className="py-3 px-4 text-xs">
+                      {o.provider === "paypal" ? "🅿️ PayPal" : o.provider === "mercadopago" ? "💚 Mercado Pago" : o.provider === "stripe" ? "💳 Stripe" : "—"}
+                    </td>
                     <td className="py-3 px-4 text-ink/60">{new Date(o.createdAt).toLocaleString()}</td>
                     <td className="py-3 px-4 text-right whitespace-nowrap">
                       <button
@@ -411,6 +474,7 @@ function OrderTable({
                   <th className="py-3 px-4">Order ID</th>
                   <th>Email</th>
                   <th>Plan</th>
+                  <th>Medio de pago</th>
                   <th>Motivo</th>
                   <th>Fecha</th>
                   <th className="text-right">Acciones</th>
@@ -424,6 +488,7 @@ function OrderTable({
                       <td className="py-3 px-4 font-mono text-xs text-ink/70">{o.id.slice(0, 12)}…</td>
                       <td className="py-3 px-4"><a href={`mailto:${u?.email || ""}`} className="text-blue-600 hover:underline text-sm">{u?.email || "—"}</a></td>
                       <td className="py-3 px-4">{o.planId}</td>
+                      <td className="py-3 px-4 text-xs">{providerLabel(o.provider)}</td>
                       <td className="py-3 px-4 text-red-600">Pago fallido / expirado</td>
                       <td className="py-3 px-4 text-ink/60">{new Date(o.createdAt).toLocaleString()}</td>
                       <td className="py-3 px-4 text-right whitespace-nowrap">

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import type { Plan } from "@/lib/types";
 import { cn } from "@/lib/cn";
@@ -13,8 +13,22 @@ import {
   useElements,
 } from "@stripe/react-stripe-js";
 import { formatPrice } from "@/lib/currency";
+import type { PaymentProvider } from "@/lib/payments/types";
 
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+type CheckoutResult =
+  | { type: "embedded"; provider: "stripe"; clientSecret: string; publishableKey?: string }
+  | { type: "redirect"; provider: PaymentProvider; url: string };
+
+const PROVIDERS: Array<{ id: PaymentProvider; label: string; desc: string }> = [
+  { id: "stripe", label: "💳 Tarjeta (Stripe)", desc: "Visa, Mastercard, Amex" },
+  { id: "paypal", label: "🅿️ PayPal", desc: "Cuenta PayPal" },
+  { id: "mercadopago", label: "💚 Mercado Pago", desc: "Tarjetas, OXXO, SPEI" },
+];
+
+function getStripePromise(publishableKey?: string) {
+  const key = publishableKey || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  return key ? loadStripe(key) : null;
+}
 
 function EmbeddedCheckout({
   clientSecret,
@@ -34,8 +48,6 @@ function EmbeddedCheckout({
     if (!stripe || !elements || processing) return;
 
     setProcessing(true);
-    console.log("[Stripe] Confirmando pago...");
-
     const result = await stripe.confirmPayment({
       elements,
       confirmParams: {
@@ -56,7 +68,7 @@ function EmbeddedCheckout({
     } else {
       console.log("[Stripe] Estado:", paymentIntent?.status);
       setProcessing(false);
-      onSuccess(); // El webhook manejará la confirmación final
+      onSuccess();
     }
   }
 
@@ -79,13 +91,60 @@ export function PricingFlow({
 }) {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [selectedProvider, setSelectedProvider] = useState<PaymentProvider>("stripe");
+  const [stripePromise, setStripePromise] = useState<ReturnType<typeof loadStripe> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showEmbedded, setShowEmbedded] = useState(false);
 
-  if (loading) {
+  const handleRedirectReturn = useCallback(() => {
+    const paypal = searchParams.get("paypal_order");
+    const mp = searchParams.get("mp_order");
+    const provider = paypal ? "paypal" : mp ? "mercadopago" : null;
+    if (provider && user) {
+      setBusyPlan("__verify__");
+      (async () => {
+        try {
+          const token = await user.getIdToken();
+          const orderId = paypal ?? mp;
+          const isTestMode =
+            typeof window !== "undefined"
+              ? localStorage.getItem("stripeTestMode") !== "false"
+              : true;
+          const res = await fetch("/api/payments/verify", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ provider, orderId, mode: isTestMode ? "test" : "live" }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            router.replace("/dashboard");
+          } else if (data.error && !data.pending) {
+            setError(data.error);
+          } else {
+            // pending: el webhook confirmará
+            setTimeout(() => router.replace("/dashboard"), 1500);
+          }
+        } catch (err: any) {
+          setError(err.message);
+        } finally {
+          setBusyPlan(null);
+        }
+      })();
+    }
+  }, [searchParams, user, router]);
+
+  useEffect(() => {
+    handleRedirectReturn();
+  }, [handleRedirectReturn]);
+
+  if (loading || busyPlan === "__verify__") {
     return <div className="text-center py-20 text-ink/60">Cargando…</div>;
   }
 
@@ -100,25 +159,38 @@ export function PricingFlow({
     setError(null);
     try {
       const token = await user!.getIdToken();
-      
-      // Determinar modo test/live desde SiteSettings o usar localStorage
-      const isTestMode = typeof window !== "undefined" 
-        ? localStorage.getItem("stripeTestMode") !== "false" 
-        : true; // default test
-      
-      const res = await fetch("/api/stripe/checkout/embedded", {
+
+      const isTestMode = typeof window !== "undefined"
+        ? localStorage.getItem("stripeTestMode") !== "false"
+        : true;
+
+      const res = await fetch("/api/payments/checkout", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ planId: plan.id, templateId, mode: isTestMode ? "test" : "live" }),
+        body: JSON.stringify({
+          planId: plan.id,
+          provider: selectedProvider,
+          templateId,
+          mode: isTestMode ? "test" : "live",
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "No se pudo iniciar el pago");
 
+      const result: CheckoutResult = data.result;
       setSelectedPlan(plan);
-      setClientSecret(data.clientSecret);
+
+      if (result.type === "redirect") {
+        // Además, registrar la orden para verificación al regresar.
+        window.location.href = result.url;
+        return;
+      }
+
+      setStripePromise(getStripePromise(result.publishableKey));
+      setClientSecret(result.clientSecret);
       setShowEmbedded(true);
     } catch (err: any) {
       setError(err.message);
@@ -134,10 +206,13 @@ export function PricingFlow({
     router.push("/dashboard");
   }
 
-  if (showEmbedded && clientSecret) {
+  if (showEmbedded && clientSecret && selectedPlan) {
     return (
       <div className="max-w-md mx-auto card p-8">
         <h2 className="font-serif text-xl text-center mb-6">Completar pago</h2>
+        <p className="text-center text-sm text-ink/60 mb-4">
+          {selectedPlan.name} · {formatPrice(selectedPlan.price, selectedPlan.currency as "mxn" | "usd" | "eur")}
+        </p>
         <Elements stripe={stripePromise} options={{ clientSecret }}>
           <EmbeddedCheckout
             clientSecret={clientSecret}
@@ -182,6 +257,11 @@ export function PricingFlow({
             <h2 className="font-serif text-2xl text-ink">{plan.name}</h2>
             <p className="text-3xl font-serif text-gold-500 my-4">
               {formatPrice(plan.price, plan.currency as "mxn" | "usd" | "eur")}
+              {plan.interval && plan.interval !== "one_time" && (
+                <span className="text-sm text-ink/60 ml-1">
+                  /{plan.interval === "month" ? "mes" : plan.interval}
+                </span>
+              )}
             </p>
             <ul className="space-y-2 text-sm text-ink/70 flex-1">
               {plan.features.map((f) => (
@@ -201,6 +281,37 @@ export function PricingFlow({
           </div>
         ))}
       </div>
+
+      <div className="max-w-md mx-auto mt-10 card p-6">
+        <p className="text-sm text-ink/60 mb-3">Método de pago</p>
+        <div className="space-y-2">
+          {PROVIDERS.map((p) => (
+            <label
+              key={p.id}
+              className={cn(
+                "flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition",
+                selectedProvider === p.id
+                  ? "border-gold-300 bg-gold-50"
+                  : "border-ink/10 hover:border-ink/20"
+              )}
+            >
+              <input
+                type="radio"
+                name="provider"
+                value={p.id}
+                checked={selectedProvider === p.id}
+                onChange={() => setSelectedProvider(p.id)}
+                className="mt-1 accent-gold-500"
+              />
+              <span>
+                <span className="block font-medium text-ink">{p.label}</span>
+                <span className="block text-xs text-ink/50">{p.desc}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
       {error && <p className="text-center text-red-600 mt-6">{error}</p>}
     </div>
   );
