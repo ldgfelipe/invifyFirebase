@@ -4,7 +4,7 @@
 // EDITOR SIMPLIFICADO - Edita título, color temático y slug de la invitación.
 // (Fase 2: editor visual drag&drop tipo Elementor sobre builderConfig.)
 // ============================================================================
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
@@ -32,6 +32,9 @@ export default function EditorPage() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [slugStatus, setSlugStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid" | "reserved">("idle");
+  const [suggestedSlug, setSuggestedSlug] = useState<string | null>(null);
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (!user || !id) return;
@@ -47,6 +50,50 @@ export default function EditorPage() {
     })();
   }, [user, id]);
 
+  // Validación live de unicidad al terminar de escribir (debounce 500ms)
+  useEffect(() => {
+    if (!inv) return;
+    const wanted = slugify(slug);
+    if (!wanted) {
+      setSlugStatus("invalid");
+      setSuggestedSlug(null);
+      return;
+    }
+    if (wanted === inv.slug) {
+      setSlugStatus("available");
+      setSuggestedSlug(null);
+      return;
+    }
+    setSlugStatus("checking");
+    setSuggestedSlug(null);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/slug/check?slug=${encodeURIComponent(slug)}&excludeId=${inv.id}`);
+        const data = await res.json();
+        if (!data.valid) {
+          if (data.error === "Palabra reservada") {
+            setSlugStatus("reserved");
+          } else {
+            setSlugStatus("invalid");
+          }
+          setSuggestedSlug(data.suggested ?? null);
+        } else if (data.available) {
+          setSlugStatus("available");
+          setSuggestedSlug(null);
+        } else {
+          setSlugStatus("taken");
+          setSuggestedSlug(data.suggested ?? null);
+        }
+      } catch {
+        setSlugStatus("idle");
+      }
+    }, 500);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [slug, inv]);
+
   async function save() {
     setSaving(true);
     setError(null);
@@ -57,14 +104,32 @@ export default function EditorPage() {
       setSaving(false);
       return;
     }
-    // Verifica unicidad del slug (excluyendo la propia invitación).
+    if (slugStatus === "taken" || slugStatus === "reserved") {
+      setError(`Ese enlace ya está en uso. Sugerencia: ${suggestedSlug ?? wanted + "-1"}`);
+      setSaving(false);
+      return;
+    }
+    // Verificación server-side final (evita race condition y respeta mayúsculas/acentos)
     if (wanted !== inv?.slug) {
-      const q = query(collection(db, "invitations"), where("slug", "==", wanted));
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        setError("Ese enlace ya está en uso. Prueba otro.");
-        setSaving(false);
-        return;
+      try {
+        const res = await fetch(`/api/slug/check?slug=${encodeURIComponent(slug)}&excludeId=${inv?.id ?? ""}`);
+        const data = await res.json();
+        if (!data.available) {
+          setError(data.error === "Palabra reservada" ? "Palabra reservada. Usa otra." : "Ese enlace ya está en uso.");
+          if (data.suggested) setSuggestedSlug(data.suggested);
+          setSlugStatus(data.error === "Palabra reservada" ? "reserved" : "taken");
+          setSaving(false);
+          return;
+        }
+      } catch {
+        // Fallback a check cliente si falla API
+        const q = query(collection(db, "invitations"), where("slug", "==", wanted));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          setError("Ese enlace ya está en uso. Prueba otro.");
+          setSaving(false);
+          return;
+        }
       }
     }
     if (!inv) return;
@@ -113,21 +178,58 @@ export default function EditorPage() {
               /i/
             </span>
             <input
-              className="input rounded-l-none"
+              className={`input rounded-l-none ${slugStatus === "taken" || slugStatus === "reserved" || slugStatus === "invalid" ? "border-red-300 focus:ring-red-200" : slugStatus === "available" ? "border-green-300" : ""}`}
               value={slug}
               onChange={(e) => setSlug(e.target.value)}
+              onBlur={() => {
+                // Dispara validación inmediata al salir del campo
+                if (debounceRef.current) clearTimeout(debounceRef.current);
+                const wanted = slugify(slug);
+                if (wanted && inv && wanted !== inv.slug) {
+                  setSlugStatus("checking");
+                  fetch(`/api/slug/check?slug=${encodeURIComponent(slug)}&excludeId=${inv.id}`)
+                    .then((r) => r.json())
+                    .then((data) => {
+                      if (!data.valid) {
+                        setSlugStatus(data.error === "Palabra reservada" ? "reserved" : "invalid");
+                        setSuggestedSlug(data.suggested ?? null);
+                      } else if (data.available) {
+                        setSlugStatus("available");
+                        setSuggestedSlug(null);
+                      } else {
+                        setSlugStatus("taken");
+                        setSuggestedSlug(data.suggested ?? null);
+                      }
+                    })
+                    .catch(() => setSlugStatus("idle"));
+                }
+              }}
+              placeholder="mi-fiesta"
             />
           </div>
           <p className="text-xs text-ink/50 mt-1">
-            Vista previa: {invitationUrl(slug || inv.slug)}
+            Vista previa: {invitationUrl(slugify(slug) || inv.slug)}
           </p>
+          {slugStatus === "checking" && <p className="text-xs text-ink/40 mt-1">⏳ Verificando disponibilidad...</p>}
+          {slugStatus === "available" && slugify(slug) !== inv.slug && <p className="text-xs text-green-600 mt-1">✅ Disponible</p>}
+          {slugStatus === "taken" && (
+            <p className="text-xs text-red-600 mt-1">
+              ❌ Ya existe. Sugerencia: <button type="button" onClick={() => { if (suggestedSlug) setSlug(suggestedSlug); }} className="underline font-medium hover:text-red-700">{suggestedSlug}</button>
+            </p>
+          )}
+          {slugStatus === "reserved" && (
+            <p className="text-xs text-red-600 mt-1">
+              🚫 Palabra reservada. Sugerencia: <button type="button" onClick={() => { if (suggestedSlug) setSlug(suggestedSlug); }} className="underline font-medium hover:text-red-700">{suggestedSlug}</button>
+            </p>
+          )}
+          {slugStatus === "invalid" && <p className="text-xs text-red-600 mt-1">⚠️ Slug no válido. Usa letras, números y guiones.</p>}
         </div>
 
         {error && <p className="text-red-600 text-sm">{error}</p>}
         {msg && <p className="text-gold-500 text-sm">{msg}</p>}
 
         <div className="flex gap-3">
-          <button onClick={save} disabled={saving} className="btn-primary">
+          <button onClick={save} disabled={saving || slugStatus === "taken" || slugStatus === "reserved" || slugStatus === "checking"} className="btn-primary disabled:opacity-50">
             {saving ? "Guardando…" : "Guardar cambios"}
           </button>
           <Link href={`/i/${inv.slug}`} className="btn-outline">
