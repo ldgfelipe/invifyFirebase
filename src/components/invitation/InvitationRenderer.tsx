@@ -57,6 +57,24 @@ function renderModule(
   }
 }
 
+function moduleWrapperStyle(m: InvitationModule): React.CSSProperties {
+  const s = (m as any).style as import("@/lib/types").ModuleStyle | undefined;
+  if (!s) return {};
+  const style: React.CSSProperties = {};
+  if (s.background) (style as any).background = s.background;
+  if (s.backgroundImage) {
+    const overlay = s.backgroundOverlay ? `linear-gradient(${s.backgroundOverlay}, ${s.backgroundOverlay}), ` : "";
+    (style as any).backgroundImage = `${overlay}url(${s.backgroundImage})`;
+    style.backgroundSize = "cover";
+    style.backgroundPosition = "center";
+  }
+  if (s.textColor) style.color = s.textColor;
+  if (s.padding) style.padding = s.padding;
+  if (s.borderRadius) style.borderRadius = s.borderRadius;
+  if (s.border) style.border = s.border;
+  return style;
+}
+
 export function InvitationRenderer({
   config,
   invitationId,
@@ -70,10 +88,21 @@ export function InvitationRenderer({
   tier?: "free" | "premium";
   features?: PlanFeatures;
 }) {
-  // Aplica color temático global vía CSS variable.
-  const themeStyle = {
+  // Aplica color temático global vía CSS variable + imagen de fondo global
+  const themeStyle: React.CSSProperties = {
     "--invify-primary": config.theme.primaryColor,
     background: config.theme.background,
+    ...(config.theme.backgroundImage
+      ? {
+          backgroundImage: config.theme.backgroundOverlay
+            ? `linear-gradient(${config.theme.backgroundOverlay}, ${config.theme.backgroundOverlay}), url(${config.theme.backgroundImage})`
+            : `url(${config.theme.backgroundImage})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundAttachment: "fixed",
+        }
+      : {}),
+    ...(config.theme.textColor ? { color: config.theme.textColor } : {}),
   } as React.CSSProperties;
 
   // Encuentra configuración del preloader para pasársela al ConditionalPreloader
@@ -87,7 +116,9 @@ export function InvitationRenderer({
         preloaderConfig={preloaderModule}
       >
         {config.modules.map((m) => (
-          <div key={m.id}>{renderModule(m, invitationId, demo, features)}</div>
+          <div key={m.id} style={moduleWrapperStyle(m)}>
+            {renderModule(m, invitationId, demo, features)}
+          </div>
         ))}
       </ConditionalPreloader>
     </main>

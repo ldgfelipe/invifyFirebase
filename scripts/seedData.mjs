@@ -56,8 +56,8 @@ export function siteConfig() {
 }
 
 // Helper para crear builderConfig rápido con módulos variables
-function baseBuilder({ primaryColor, background, fontFamily = "serif", modules }) {
-  return { theme: { primaryColor, background, fontFamily }, modules };
+function baseBuilder({ primaryColor, background, fontFamily = "serif", backgroundImage, backgroundOverlay, textColor, modules }) {
+  return { theme: { primaryColor, background, backgroundImage, backgroundOverlay, textColor, fontFamily }, modules };
 }
 
 // Catálogo completo: 6 por categoría
@@ -184,7 +184,7 @@ export const TEMPLATES = [
     active: true,
     createdAt: Date.now() + 5,
     builderConfig: baseBuilder({
-      primaryColor: "#A78BFA", background: "#0F0F1E", fontFamily: "serif",
+      primaryColor: "#A78BFA", background: "#0F0F1E", backgroundImage: "https://loremflickr.com/1920/1080/wedding?lock=100", backgroundOverlay: "rgba(15,15,30,0.7)", textColor: "#FFFFFF", fontFamily: "serif",
       modules: [
         { id: "hdr", type: "header", visible: true, title: "Bajo las estrellas", names: "Luna & Diego", date: "2026-08-08T20:00:00", subtitle: "Una ceremonia nocturna mágica", imageUrl: "https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=1200&q=80" },
         { id: "cd", type: "countdown", visible: true, targetDate: "2026-08-08T20:00:00", label: "Brillará nuestra noche" },

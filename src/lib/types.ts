@@ -185,10 +185,21 @@ export type ModuleType =
   | "quiz"
   | "rsvp";
 
+export interface ModuleStyle {
+  background?: string; // color sólido o gradiente (ej. "#FFFBF2" o "linear-gradient(...)")
+  backgroundImage?: string; // URL de imagen de fondo del módulo
+  backgroundOverlay?: string; // overlay rgba sobre imagen (ej. "rgba(0,0,0,0.4)")
+  textColor?: string;
+  padding?: string; // ej. "40px 20px"
+  borderRadius?: string; // ej. "16px"
+  border?: string; // ej. "1px solid #eee"
+}
+
 interface BaseModule {
   id: string; // id estable del módulo
   type: ModuleType;
   visible: boolean;
+  style?: ModuleStyle; // estilos drásticos por módulo
 }
 
 export interface PreloaderModule extends BaseModule {
@@ -301,6 +312,9 @@ export interface BuilderConfig {
   theme: {
     primaryColor: string;
     background: string;
+    backgroundImage?: string; // imagen de fondo global de la invitación
+    backgroundOverlay?: string;
+    textColor?: string;
     fontFamily: "serif" | "sans";
   };
 }

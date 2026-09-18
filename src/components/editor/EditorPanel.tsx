@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import type { InvitationModule, BuilderConfig } from "@/lib/types";
+import type { InvitationModule, BuilderConfig, ModuleStyle } from "@/lib/types";
 
 interface EditorPanelProps {
   module: InvitationModule;
@@ -39,6 +39,20 @@ export function EditorPanel({ module, config, onUpdate, onRemove, theme, onTheme
         {renderModuleFields(module, onUpdate)}
       </div>
 
+      {/* Estilo del módulo (nuevo: cambios drásticos) */}
+      <details className="group" open>
+        <summary className="flex items-center gap-2 cursor-pointer text-sm font-medium text-ink/70">
+          <span className="text-purple-500">✨</span> Estilo del módulo
+          <span className="text-xs text-ink/40 ml-auto">fondo, imagen, bordes</span>
+        </summary>
+        <div className="mt-4 space-y-4 p-4 bg-purple-50/50 rounded-lg border border-purple-100">
+          <ModuleStyleEditor
+            style={(module as any).style as ModuleStyle | undefined}
+            onChange={(style) => onUpdate({ style } as any)}
+          />
+        </div>
+      </details>
+
       {/* Tema global (siempre visible al final) */}
       <details className="group">
         <summary className="flex items-center gap-2 cursor-pointer text-sm font-medium text-ink/70">
@@ -62,15 +76,28 @@ export function EditorPanel({ module, config, onUpdate, onRemove, theme, onTheme
               />
             </div>
           </div>
-          <div>
-            <label className="text-sm text-ink/70">Fondo</label>
-            <input
-              type="color"
-              value={theme.background}
-              onChange={(e) => onThemeChange({ background: e.target.value })}
-              className="w-12 h-10 mt-1 rounded border border-ink/15"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm text-ink/70">Fondo</label>
+              <input
+                type="color"
+                value={theme.background}
+                onChange={(e) => onThemeChange({ background: e.target.value })}
+                className="w-12 h-10 mt-1 rounded border border-ink/15"
+              />
+            </div>
+            <div>
+              <label className="text-sm text-ink/70">Color texto global</label>
+              <input
+                type="color"
+                value={(theme as any).textColor ?? "#000000"}
+                onChange={(e) => onThemeChange({ textColor: e.target.value } as any)}
+                className="w-12 h-10 mt-1 rounded border border-ink/15"
+              />
+            </div>
           </div>
+          <ImageField label="Imagen de fondo global" value={(theme as any).backgroundImage ?? ""} onChange={(v) => onThemeChange({ backgroundImage: v } as any)} />
+          <Field label="Overlay global (ej. rgba(0,0,0,0.3))" value={(theme as any).backgroundOverlay ?? ""} onChange={(v) => onThemeChange({ backgroundOverlay: v } as any)} placeholder="rgba(0,0,0,0.3) o vacío" />
           <div>
             <label className="text-sm text-ink/70">Fuente</label>
             <select
@@ -398,6 +425,56 @@ function GiftTableEditor({
           + Añadir regalo
         </button>
       </div>
+    </div>
+  );
+}
+
+function ModuleStyleEditor({
+  style,
+  onChange,
+}: {
+  style?: ModuleStyle;
+  onChange: (style: ModuleStyle | undefined) => void;
+}) {
+  const s = style ?? {};
+  function upd(patch: Partial<ModuleStyle>) {
+    const next = { ...s, ...patch };
+    // limpia vacíos
+    Object.keys(next).forEach((k) => {
+      if ((next as any)[k] === "" || (next as any)[k] == null) delete (next as any)[k];
+    });
+    onChange(Object.keys(next).length ? next : undefined);
+  }
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="text-xs text-ink/70">Fondo</label>
+          <div className="flex gap-2 mt-1">
+            <input type="color" value={s.background ?? "#ffffff"} onChange={(e) => upd({ background: e.target.value })} className="w-10 h-9 rounded border border-ink/15" />
+            <input className="input flex-1 text-xs font-mono" value={s.background ?? ""} onChange={(e) => upd({ background: e.target.value })} placeholder="#FFF o gradient" />
+          </div>
+        </div>
+        <div>
+          <label className="text-xs text-ink/70">Color texto</label>
+          <div className="flex gap-2 mt-1">
+            <input type="color" value={s.textColor ?? "#000000"} onChange={(e) => upd({ textColor: e.target.value })} className="w-10 h-9 rounded border border-ink/15" />
+            <input className="input flex-1 text-xs font-mono" value={s.textColor ?? ""} onChange={(e) => upd({ textColor: e.target.value })} placeholder="#000" />
+          </div>
+        </div>
+      </div>
+      <ImageField label="Imagen de fondo del módulo" value={s.backgroundImage ?? ""} onChange={(v) => upd({ backgroundImage: v })} />
+      <Field label="Overlay (ej. rgba(0,0,0,0.35))" value={s.backgroundOverlay ?? ""} onChange={(v) => upd({ backgroundOverlay: v })} placeholder="rgba(0,0,0,0.35)" />
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Padding (ej. 24px)" value={s.padding ?? ""} onChange={(v) => upd({ padding: v })} placeholder="24px o 40px 20px" />
+        <Field label="Radio borde (ej. 16px)" value={s.borderRadius ?? ""} onChange={(v) => upd({ borderRadius: v })} placeholder="16px" />
+      </div>
+      <Field label="Borde (ej. 1px solid #eee)" value={s.border ?? ""} onChange={(v) => upd({ border: v })} placeholder="1px solid #eee" />
+      {(s.background || s.backgroundImage) && (
+        <button onClick={() => onChange(undefined)} className="text-xs text-red-500 hover:underline">
+          Limpiar estilo del módulo
+        </button>
+      )}
     </div>
   );
 }
