@@ -17,7 +17,7 @@ import {
 import type { Invitation, Order, Template, UserEntitlements } from "@/lib/types";
 import { isInvitationActive } from "@/lib/invitationValidity";
 import { formatQuota } from "@/lib/plans";
-import { invitationUrl } from "@/lib/seo";
+import { ShareMenu } from "@/components/invitation/ShareMenu";
 import { cn } from "@/lib/cn";
 
 export default function MyInvitationsPage() {
@@ -25,7 +25,6 @@ export default function MyInvitationsPage() {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [copied, setCopied] = useState<string | null>(null);
   const [processingOrder, setProcessingOrder] = useState<string | null>(null);
   const [deletingOrder, setDeletingOrder] = useState<string | null>(null);
   const [entitlements, setEntitlements] = useState<UserEntitlements | null>(null);
@@ -138,11 +137,7 @@ export default function MyInvitationsPage() {
     }
   }
 
-  function share(inv: Invitation) {
-    navigator.clipboard.writeText(invitationUrl(inv.slug));
-    setCopied(inv.id);
-    setTimeout(() => setCopied(null), 2000);
-  }
+  // Share ahora via ShareMenu (copiar + WhatsApp + correo con URL runtime)
 
   async function procesarOrderPendiente(orderId: string) {
     setProcessingOrder(orderId);
@@ -411,9 +406,7 @@ export default function MyInvitationsPage() {
               <Link href={`/i/${inv.slug}`} className="btn-outline text-sm px-3 py-2">
                 Ver
               </Link>
-              <button onClick={() => share(inv)} className="btn-outline text-sm px-3 py-2">
-                {copied === inv.id ? "¡Copiado!" : "Compartir"}
-              </button>
+              <ShareMenu slug={inv.slug} title={inv.title} />
             </div>
           </div>
         ))}

@@ -21,7 +21,8 @@ import {
 } from "firebase/firestore";
 import type { Invitation, Rsvp, QuizResponse } from "@/lib/types";
 import { getInvitationFeatures } from "@/lib/plans";
-import { invitationUrl, whatsappShareUrl, emailShareUrl } from "@/lib/seo";
+import { invitationUrlRuntime } from "@/lib/seo";
+import { ShareMenu } from "@/components/invitation/ShareMenu";
 
 export default function StatsPage() {
   const { id } = useParams<{ id: string }>();
@@ -92,7 +93,8 @@ export default function StatsPage() {
     );
   }
 
-  const url = invitationUrl(inv.slug);
+  // URL runtime (donde se ejecuta) para compartir
+  const url = invitationUrlRuntime(inv.slug);
 
   return (
     <div className="print-area">
@@ -101,21 +103,8 @@ export default function StatsPage() {
       </Link>
       <div className="flex flex-wrap items-center justify-between mt-4 mb-6 gap-3">
         <h1 className="section-title">{inv.title} · Estadísticas</h1>
-        <div className="flex gap-2">
-          <a
-            href={whatsappShareUrl(`Te invito a ${inv.title}`, url)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-outline text-sm px-3 py-2"
-          >
-            Compartir WhatsApp
-          </a>
-          <a
-            href={emailShareUrl(`Invitación: ${inv.title}`, `Hola, te invito a ${url}`)}
-            className="btn-outline text-sm px-3 py-2"
-          >
-            Compartir email
-          </a>
+        <div className="flex flex-wrap gap-2 items-center">
+          <ShareMenu slug={inv.slug} title={inv.title} variant="inline" />
           <button onClick={() => window.print()} className="btn-outline text-sm px-3 py-2">
             Exportar PDF
           </button>
@@ -123,6 +112,9 @@ export default function StatsPage() {
             Reiniciar
           </button>
         </div>
+      </div>
+      <div className="mb-6 text-xs text-ink/50 break-all bg-ink/5 rounded-lg px-3 py-2">
+        🔗 Enlace: <a href={url} target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:underline">{url}</a>
       </div>
 
       {/* KPIs */}
