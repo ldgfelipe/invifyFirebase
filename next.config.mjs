@@ -10,8 +10,8 @@ const nextConfig = {
       { protocol: "https", hostname: "api.mapbox.com" },
     ],
   },
-  // Permite despliegue en Firebase Hosting + Cloud Functions/Cloud Run.
-  output: "standalone",
+  // Firebase Hosting Frameworks genera su propio bundle; "standalone" rompe el probe (timeout 10s en deploy)
+  // output: "standalone",
   experimental: {
     // Habilita la generación de sitemap/robots en App Router.
     typedRoutes: false,
