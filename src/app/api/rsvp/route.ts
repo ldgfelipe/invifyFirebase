@@ -6,7 +6,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { doc, getDoc, addDoc, collection } from "firebase/firestore";
 import { serverDb } from "@/lib/firebase/serverClient";
 import { checkRateLimit } from "@/lib/rateLimit";
-import type { Rsvp } from "@/lib/types";
+import { isInvitationExpired } from "@/lib/invitationValidity";
+import { getInvitationFeatures } from "@/lib/plans";
+import type { Invitation, Rsvp } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   // Rate-limit por IP.
@@ -38,10 +40,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Personas inválidas" }, { status: 400 });
   }
 
-  // Verifica que la invitación exista y esté publicada.
+  // Verifica que la invitación exista, esté publicada y vigente.
   const invSnap = await getDoc(doc(serverDb, "invitations", invitationId));
   if (!invSnap.exists || (invSnap.data() as any).status !== "published") {
     return NextResponse.json({ error: "Invitación no disponible" }, { status: 404 });
+  }
+  if (isInvitationExpired(invSnap.data() as any)) {
+    return NextResponse.json({ error: "La invitación ha finalizado" }, { status: 410 });
+  }
+  if (!getInvitationFeatures(invSnap.data() as Invitation).rsvp) {
+    return NextResponse.json(
+      { error: "El RSVP no está incluido en el plan de esta invitación" },
+      { status: 403 }
+    );
   }
 
   const rsvp: Rsvp = {

@@ -15,16 +15,15 @@ export async function POST(req: NextRequest) {
   const forwardHeaders = new Headers(req.headers);
   forwardHeaders.set("content-type", "application/json");
   forwardHeaders.set("stripe-signature", signature);
-  // El webhook unificado detecta el modo por estas cabeceras opcionales.
-  if (!forwardHeaders.has("x-invify-mode")) {
-    forwardHeaders.set(
-      "x-invify-mode",
-      process.env.STRIPE_SECRET_KEY?.startsWith("sk_live") ? "live" : "test"
-    );
-  }
+  // No forzar x-invify-mode aquí: el handler unificado prueba test/live automáticamente
+  // y además respeta ?mode=live|test si Stripe está configurado con ese query param.
 
   const url = new URL(req.url);
   const target = new URL("/api/payments/webhook/stripe", url.origin);
+  // Preserva ?mode si viene en la URL original (recomendado: configurar webhook live con ?mode=live)
+  if (url.searchParams.has("mode")) {
+    target.searchParams.set("mode", url.searchParams.get("mode")!);
+  }
 
   const res = await fetch(target, {
     method: "POST",

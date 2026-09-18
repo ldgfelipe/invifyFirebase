@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { cn } from "@/lib/cn";
-import type { InvitationModule } from "@/lib/types";
+import { isModuleAllowed, FREE_FEATURES } from "@/lib/plans";
+import type { InvitationModule, PlanFeatures } from "@/lib/types";
 
 interface EditorSidebarProps {
   modules: InvitationModule[];
   selectedId: string | null;
+  features?: PlanFeatures;
   onSelect: (id: string | null) => void;
   onAdd: (type: InvitationModule["type"]) => void;
   onRemove: (id: string) => void;
@@ -30,6 +32,7 @@ const MODULE_TYPES: { type: InvitationModule["type"]; label: string; icon: strin
 export function EditorSidebar({
   modules,
   selectedId,
+  features = FREE_FEATURES,
   onSelect,
   onAdd,
   onRemove,
@@ -109,19 +112,26 @@ export function EditorSidebar({
       <div className="border-t border-ink/10 pt-4 space-y-2">
         <h4 className="text-xs uppercase tracking-widest text-ink/40 px-2 mb-2">Añadir módulo</h4>
         <div className="grid grid-cols-2 gap-2">
-          {MODULE_TYPES.map((t) => (
-            <button
-              key={t.type}
-              onClick={() => onAdd(t.type)}
-              className={cn(
-                "flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition",
-                "border-ink/10 hover:border-gold-300 hover:bg-gold-50"
-              )}
-            >
-              <span className="text-2xl">{t.icon}</span>
-              <span className="text-xs font-medium text-ink/70">{t.label}</span>
-            </button>
-          ))}
+          {MODULE_TYPES.map((t) => {
+            const locked = !isModuleAllowed(t.type, features);
+            return (
+              <button
+                key={t.type}
+                onClick={() => onAdd(t.type)}
+                disabled={locked}
+                title={locked ? "Incluido en el plan Pro o Premium" : undefined}
+                className={cn(
+                  "flex flex-col items-center gap-1 p-3 rounded-lg border-2 transition",
+                  locked
+                    ? "border-ink/5 opacity-45 cursor-not-allowed"
+                    : "border-ink/10 hover:border-gold-300 hover:bg-gold-50"
+                )}
+              >
+                <span className="text-2xl">{locked ? "🔒" : t.icon}</span>
+                <span className="text-xs font-medium text-ink/70">{t.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>

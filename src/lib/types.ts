@@ -25,6 +25,8 @@ export interface UserProfile {
   bio?: string;
   avatarUrl?: string;
   billing?: UserBilling;
+  // Entitlements de la cuenta (plan comprado, cupos y features).
+  entitlements?: UserEntitlements;
 }
 
 // ----------------------------- Catálogo -------------------------------------
@@ -64,6 +66,16 @@ export interface Invitation {
   planId?: string; // plan comprado
   tier: InvitationTier; // NUEVO: 'free' | 'premium'
   tierUpdatedAt?: number; // timestamp del último cambio de tier
+  // Snapshot de features del plan al crearse (gating sin lookup en render).
+  features?: PlanFeatures;
+  // Despublicado automático por vigencia (fecha del evento + 1 día).
+  unpublishedAt?: number;
+  unpublishedReason?: string;
+  // Ciclo de vida: el cliente puede "conservar" la invitación para no borrarla.
+  retain?: boolean;
+  retainedAt?: number;
+  // Momento en que el barrido podrá eliminarla (despublicación + gracia).
+  deleteAfter?: number;
   // Config personalizada del cliente (copia editable del template).
   builderConfig: BuilderConfig;
   stats: InvitationStats;
@@ -90,12 +102,44 @@ export interface QuizResponse {
 }
 
 // ----------------------------- Planes / Pagos ------------------------------
+// Features incluidas en un plan (gating de módulos y capacidades).
+export interface PlanFeatures {
+  rsvp: boolean;
+  quiz: boolean;
+  audio: boolean; // "Música"
+  stats: boolean; // estadísticas de vistas
+  allTemplates: boolean; // acceso a todo el catálogo de temas/plantillas
+  prioritySupport: boolean;
+}
+
+// Derechos que un plan otorga a la cuenta.
+export interface PlanEntitlements {
+  planId: string;
+  planName: string;
+  // Cupo de invitaciones ACTIVAS simultáneas; "unlimited" para Premium.
+  quota: number | "unlimited";
+  features: PlanFeatures;
+  interval: "one_time" | "day" | "week" | "month" | "year";
+}
+
+// Snapshot de entitlements guardado en el usuario al comprar.
+export interface UserEntitlements extends PlanEntitlements {
+  // Plantillas permitidas (plantillas compradas) o "all" en Premium.
+  allowedTemplateIds: string[] | "all";
+  // Para suscripciones (Premium): estado y vencimiento.
+  subscriptionActive?: boolean;
+  subscriptionExpiresAt?: number;
+  updatedAt: number;
+}
+
 export interface Plan {
   id: string;
   name: string;
   price: number; // en centavos
   currency: string;
   features: string[];
+  // Entitlements del plan (si no existe, se usa el catálogo por defecto).
+  entitlement?: Partial<PlanEntitlements>;
   stripePriceId: string; // legacy
   interval?: "one_time" | "day" | "week" | "month" | "year";
   stripePriceIdTest?: string;
@@ -345,6 +389,7 @@ export type LogAction =
   | "invitation.updated"
   | "invitation.published"
   | "invitation.unpublished"
+  | "invitation.retained"
   | "invitation.deleted"
   | "invitation.cloned_from_template"
   | "template.created"

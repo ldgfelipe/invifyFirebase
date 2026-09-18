@@ -10,11 +10,13 @@ import {
   where,
   orderBy,
   getDocs,
+  getDoc,
   doc,
-  updateDoc,
   deleteDoc,
 } from "firebase/firestore";
-import type { Invitation, Order } from "@/lib/types";
+import type { Invitation, Order, Template, UserEntitlements } from "@/lib/types";
+import { isInvitationActive } from "@/lib/invitationValidity";
+import { formatQuota } from "@/lib/plans";
 import { invitationUrl } from "@/lib/seo";
 import { cn } from "@/lib/cn";
 
@@ -26,6 +28,9 @@ export default function MyInvitationsPage() {
   const [copied, setCopied] = useState<string | null>(null);
   const [processingOrder, setProcessingOrder] = useState<string | null>(null);
   const [deletingOrder, setDeletingOrder] = useState<string | null>(null);
+  const [entitlements, setEntitlements] = useState<UserEntitlements | null>(null);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [creating, setCreating] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -49,6 +54,18 @@ export default function MyInvitationsPage() {
         );
         const ordSnap = await getDocs(ordQ);
         setPendingOrders(ordSnap.docs.map((d) => d.data() as Order));
+
+        // Entitlements de la cuenta
+        const userSnap = await getDoc(doc(db, "users", user.uid));
+        setEntitlements(
+          (userSnap.data()?.entitlements as UserEntitlements | undefined) ?? null
+        );
+
+        // Plantillas activas (para crear con cupo)
+        const tplSnap = await getDocs(
+          query(collection(db, "templates"), where("active", "==", true))
+        );
+        setTemplates(tplSnap.docs.map((d) => d.data() as Template));
       } catch (err) {
         console.error(err);
       } finally {
@@ -57,12 +74,68 @@ export default function MyInvitationsPage() {
     })();
   }, [user]);
 
+  async function patchInvitation(inv: Invitation, payload: Record<string, unknown>) {
+    const token = await user?.getIdToken();
+    const res = await fetch(`/api/invitations/${inv.id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? "No se pudo actualizar");
+    setInvitations((prev) =>
+      prev.map((i) => (i.id === inv.id ? { ...i, ...payload } as Invitation : i))
+    );
+  }
+
   async function togglePublish(inv: Invitation) {
     const next = inv.status === "published" ? "draft" : "published";
-    await updateDoc(doc(db, "invitations", inv.id), { status: next });
-    setInvitations((prev) =>
-      prev.map((i) => (i.id === inv.id ? { ...i, status: next } : i))
-    );
+    try {
+      await patchInvitation(inv, { status: next });
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }
+
+  async function retain(inv: Invitation) {
+    try {
+      await patchInvitation(inv, { retain: true });
+    } catch (err: any) {
+      alert(err.message);
+    }
+  }
+
+  async function createInvitation(templateId: string) {
+    if (!user) return;
+    setCreating(templateId);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch("/api/invitations/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ templateId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "No se pudo crear");
+      const invQ = query(
+        collection(db, "invitations"),
+        where("ownerUid", "==", user.uid),
+        orderBy("createdAt", "desc")
+      );
+      const invSnap = await getDocs(invQ);
+      setInvitations(invSnap.docs.map((d) => d.data() as Invitation));
+      alert("¡Invitación creada! Ya aparece en tu lista.");
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    } finally {
+      setCreating(null);
+    }
   }
 
   function share(inv: Invitation) {
@@ -158,14 +231,80 @@ export default function MyInvitationsPage() {
 
   if (loading) return <p className="text-ink/60">Cargando…</p>;
 
+  const activeCount = invitations.filter((i) => isInvitationActive(i)).length;
+  const quota = entitlements?.quota ?? 0;
+  const canCreateMore =
+    !!entitlements && (quota === "unlimited" || activeCount < quota);
+  const allowedTemplates = entitlements
+    ? templates.filter(
+        (t) =>
+          entitlements.features.allTemplates ||
+          entitlements.allowedTemplateIds === "all" ||
+          entitlements.allowedTemplateIds.includes(t.id)
+      )
+    : [];
+
   return (
     <div>
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
         <h1 className="section-title">Mis invitaciones</h1>
         <Link href="/templates" className="btn-primary w-full sm:w-auto">
           Comprar otra invitación
         </Link>
       </div>
+
+      <div className="mb-8 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink/60">
+        <span>
+          Plan:{" "}
+          <strong className="text-ink">
+            {entitlements?.planName ?? "Sin plan"}
+          </strong>
+        </span>
+        <span>
+          Activas: <strong className="text-ink">{activeCount}</strong> de{" "}
+          <strong className="text-ink">
+            {entitlements ? formatQuota(quota) : "0"}
+          </strong>
+        </span>
+        {entitlements && (
+          <span className="text-xs">
+            {entitlements.features.rsvp ? "RSVP" : "RSVP bloqueado"} ·{" "}
+            {entitlements.features.quiz ? "Quiz" : "Quiz bloqueado"} ·{" "}
+            {entitlements.features.audio ? "Música" : "Música bloqueada"}
+          </span>
+        )}
+      </div>
+
+      {/* Crear invitación consumiendo cupo del plan */}
+      {entitlements && canCreateMore && allowedTemplates.length > 0 && (
+        <div className="card p-5 mb-8">
+          <h3 className="font-serif text-lg text-ink mb-1">Crear invitación</h3>
+          <p className="text-xs text-ink/50 mb-4">
+            Usa una de tus invitaciones incluidas en el plan.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {allowedTemplates.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => createInvitation(t.id)}
+                disabled={creating === t.id}
+                className="btn-outline text-sm px-3 py-2"
+              >
+                {creating === t.id ? "Creando…" : `+ ${t.name}`}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {entitlements && canCreateMore && allowedTemplates.length === 0 && (
+        <div className="card p-5 mb-8 text-sm text-ink/60">
+          No hay plantillas disponibles para tu plan.{" "}
+          <Link href="/templates" className="text-gold-500 hover:underline">
+            Ver catálogo
+          </Link>
+        </div>
+      )}
 
       {/* Orders pendientes */}
       {pendingOrders.length > 0 && (
@@ -226,15 +365,27 @@ export default function MyInvitationsPage() {
                 <h3 className="font-serif text-xl text-ink">{inv.title}</h3>
                 <p className="text-sm text-ink/60">/i/{inv.slug}</p>
               </div>
-              <span
-                className={cn(
-                  "text-xs px-2 py-1 rounded-full",
-                  inv.status === "published"
-                    ? "bg-green-100 text-green-700"
-                    : "bg-ink/10 text-ink/60"
+              <span className="flex flex-col items-end gap-1">
+                <span
+                  className={cn(
+                    "text-xs px-2 py-1 rounded-full",
+                    inv.status === "published"
+                      ? "bg-green-100 text-green-700"
+                      : "bg-ink/10 text-ink/60"
+                  )}
+                >
+                  {inv.status === "published" ? "Publicada" : "Borrador"}
+                </span>
+                {inv.unpublishedReason === "event_expired" && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700">
+                    Finalizada
+                  </span>
                 )}
-              >
-                {inv.status === "published" ? "Publicada" : "Borrador"}
+                {inv.retain && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-gold-100 text-gold-600">
+                    Conservada
+                  </span>
+                )}
               </span>
             </div>
 
@@ -242,6 +393,15 @@ export default function MyInvitationsPage() {
               <button onClick={() => togglePublish(inv)} className="btn-outline text-sm px-3 py-2">
                 {inv.status === "published" ? "Despublicar" : "Publicar"}
               </button>
+              {!inv.retain && inv.unpublishedReason === "event_expired" && (
+                <button
+                  onClick={() => retain(inv)}
+                  className="btn-outline text-sm px-3 py-2"
+                  title="Evita que se elimine automáticamente"
+                >
+                  Conservar
+                </button>
+              )}
               <Link href={`/dashboard/invitations/${inv.id}/editor`} className="btn-primary text-sm px-3 py-2">
                 Editar visual
               </Link>

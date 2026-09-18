@@ -19,8 +19,32 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function getMode(req: NextRequest): "test" | "live" {
-  const m = req.headers.get("x-invify-mode");
-  return m === "live" ? "live" : "test";
+  const header = req.headers.get("x-invify-mode");
+  if (header === "live" || header === "test") return header;
+  const q = req.nextUrl.searchParams.get("mode");
+  if (q === "live" || q === "test") return q;
+  // Default: test (seguro) si no se especifica. Para live, configurar webhook URL con ?mode=live
+  return "test";
+}
+
+// Intenta verificar Stripe con ambos modos (live/test) para no depender de header/query
+async function verifyStripeWithFallback(payload: string, signature: string, preferred: "test" | "live") {
+  const modes: Array<"test" | "live"> = preferred === "live" ? ["live", "test"] : ["test", "live"];
+  let lastErr: any = null;
+  for (const mode of modes) {
+    try {
+      const res = await stripeVerifyWebhook(payload, signature, mode);
+      if (res) return { res, mode };
+    } catch (err: any) {
+      lastErr = err;
+      // Si es error de firma, probar siguiente modo
+      if (err.message?.includes("No signatures found") || err.message?.includes("signature") || err.message?.includes("whsec")) continue;
+      // Otros errores también probar siguiente
+      continue;
+    }
+  }
+  if (lastErr) throw lastErr;
+  return null;
 }
 
 function getHeaderMap(req: NextRequest): Record<string, string> {
@@ -37,10 +61,14 @@ async function handleStripe(req: NextRequest): Promise<Response> {
   const signature = req.headers.get("stripe-signature") ?? "";
   if (!signature) return NextResponse.json({ error: "Sin firma" }, { status: 400 });
 
-  const mode = getMode(req);
+  const preferredMode = getMode(req);
   let verified: { event: Stripe.Event } | null = null;
+  let verifiedMode: "test" | "live" = preferredMode;
   try {
-    verified = await stripeVerifyWebhook(payload, signature, mode);
+    const fallback = await verifyStripeWithFallback(payload, signature, preferredMode);
+    if (!fallback) return NextResponse.json({ error: "No se pudo verificar webhook (revisa whsec test/live)" }, { status: 400 });
+    verified = fallback.res;
+    verifiedMode = fallback.mode;
   } catch (err: any) {
     await LogHelper.webhookFailed("stripe.signature", signature.slice(0, 16), err.message);
     return NextResponse.json({ error: "Firma inválida" }, { status: 400 });

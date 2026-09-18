@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase/client";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { getInvitationFeatures, isModuleAllowed, FREE_FEATURES } from "@/lib/plans";
 import type { Invitation, BuilderConfig, InvitationModule } from "@/lib/types";
 import { EditorSidebar } from "@/components/editor/EditorSidebar";
 import { EditorCanvas } from "@/components/editor/EditorCanvas";
@@ -45,6 +46,11 @@ export default function InvitationEditorPage() {
     })();
   }, [user, id, router]);
 
+  const features = useMemo(
+    () => (invitation ? getInvitationFeatures(invitation) : FREE_FEATURES),
+    [invitation]
+  );
+
   const selectModule = useCallback((moduleId: string | null) => {
     setSelectedModuleId(moduleId);
   }, []);
@@ -60,11 +66,16 @@ export default function InvitationEditorPage() {
 
   const addModule = useCallback((type: InvitationModule["type"]) => {
     if (!config) return;
+    if (!isModuleAllowed(type, features)) {
+      setError("Ese módulo se incluye en el plan Pro o Premium. Mejora tu plan para usarlo.");
+      return;
+    }
+    setError(null);
     const newModule = createDefaultModule(type);
     const newConfig = { ...config, modules: [...config.modules, newModule as InvitationModule] };
     setConfig(newConfig);
     setSelectedModuleId(newModule.id);
-  }, [config]);
+  }, [config, features]);
 
   const removeModule = useCallback((moduleId: string) => {
     if (!config) return;
@@ -117,9 +128,15 @@ export default function InvitationEditorPage() {
           <h1 className="font-serif text-xl text-ink">Editor</h1>
           <p className="text-xs text-ink/50 mt-1">{invitation.title}</p>
         </div>
+        {(!features.rsvp || !features.quiz || !features.audio) && (
+          <p className="mx-4 mt-3 rounded-lg bg-gold-50 border border-gold-200 px-3 py-2 text-xs text-ink/70">
+            🔒 RSVP, Quiz y Música se incluyen en el plan <strong>Pro</strong>.
+          </p>
+        )}
         <EditorSidebar
           modules={config.modules}
           selectedId={selectedModuleId}
+          features={features}
           onSelect={selectModule}
           onAdd={addModule}
           onRemove={removeModule}

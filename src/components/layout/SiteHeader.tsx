@@ -5,12 +5,16 @@
 // Muestra login/logout y un acceso al panel admin si el usuario es admin.
 // ============================================================================
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 
 export function SiteHeader() {
   const { user, profile, signOut } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+
+  // Las invitaciones públicas (/i/[slug]) se muestran sin la cabecera del sitio.
+  if (pathname?.startsWith("/i/")) return null;
 
   async function handleLogout() {
     await signOut();

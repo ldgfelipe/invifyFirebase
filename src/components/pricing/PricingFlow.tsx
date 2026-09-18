@@ -95,10 +95,31 @@ export function PricingFlow({
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
+  const [step, setStep] = useState<"plan" | "pay">("plan");
   const [selectedProvider, setSelectedProvider] = useState<PaymentProvider>("stripe");
   const [stripePromise, setStripePromise] = useState<ReturnType<typeof loadStripe> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showEmbedded, setShowEmbedded] = useState(false);
+  const [isTestMode, setIsTestMode] = useState<boolean>(true);
+
+  // Fuente autoritativa de modo test/live: Firestore via API, no localStorage
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/site/settings", { cache: "no-store" });
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) setIsTestMode(data.stripeTestMode !== false);
+        }
+      } catch {
+        // mantiene default test (seguro) si falla
+      }
+      // Limpia localStorage obsoleto para evitar confusión
+      try { localStorage.removeItem("stripeTestMode"); } catch {}
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const handleRedirectReturn = useCallback(() => {
     const paypal = searchParams.get("paypal_order");
@@ -110,10 +131,6 @@ export function PricingFlow({
         try {
           const token = await user.getIdToken();
           const orderId = paypal ?? mp;
-          const isTestMode =
-            typeof window !== "undefined"
-              ? localStorage.getItem("stripeTestMode") !== "false"
-              : true;
           const res = await fetch("/api/payments/verify", {
             method: "POST",
             headers: {
@@ -138,7 +155,7 @@ export function PricingFlow({
         }
       })();
     }
-  }, [searchParams, user, router]);
+  }, [searchParams, user, router, isTestMode]);
 
   useEffect(() => {
     handleRedirectReturn();
@@ -154,15 +171,18 @@ export function PricingFlow({
     return <div className="text-center py-20 text-ink/60">Redirigiendo…</div>;
   }
 
+  function selectPlan(plan: Plan) {
+    setSelectedPlan(plan);
+    setError(null);
+    setStep("pay");
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
   async function choosePlan(plan: Plan) {
     setBusyPlan(plan.id);
     setError(null);
     try {
       const token = await user!.getIdToken();
-
-      const isTestMode = typeof window !== "undefined"
-        ? localStorage.getItem("stripeTestMode") !== "false"
-        : true;
 
       const res = await fetch("/api/payments/checkout", {
         method: "POST",
@@ -233,84 +253,145 @@ export function PricingFlow({
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-16">
-      <h1 className="section-title text-center">Elige tu plan</h1>
-      <p className="text-center text-ink/60 mb-10">
-        {templateId
-          ? "Completa tu pago para personalizar tu invitación."
-          : "Selecciona un plan para empezar."}
-      </p>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {plans.map((plan, i) => (
-          <div
-            key={plan.id}
+      {/* Stepper */}
+      <div className="flex items-center justify-center gap-3 mb-10 text-sm">
+        <div className="flex items-center gap-2">
+          <span
             className={cn(
-              "card p-8 flex flex-col",
-              i === 1 && "ring-2 ring-gold-300 scale-[1.03]"
+              "w-7 h-7 rounded-full flex items-center justify-center font-medium",
+              step === "pay" ? "bg-green-500 text-white" : "bg-gold-500 text-white"
             )}
           >
-            {i === 1 && (
-              <span className="self-start text-xs uppercase tracking-widest bg-gold-100 text-gold-500 px-3 py-1 rounded-full mb-3">
-                Popular
-              </span>
+            {step === "pay" ? "✓" : "1"}
+          </span>
+          <span className={step === "plan" ? "text-ink font-medium" : "text-ink/50"}>Plan</span>
+        </div>
+        <span className="w-10 h-px bg-ink/15" />
+        <div className="flex items-center gap-2">
+          <span
+            className={cn(
+              "w-7 h-7 rounded-full flex items-center justify-center font-medium",
+              step === "pay" ? "bg-gold-500 text-white" : "bg-ink/10 text-ink/50"
             )}
-            <h2 className="font-serif text-2xl text-ink">{plan.name}</h2>
-            <p className="text-3xl font-serif text-gold-500 my-4">
-              {formatPrice(plan.price, plan.currency as "mxn" | "usd" | "eur")}
-              {plan.interval && plan.interval !== "one_time" && (
-                <span className="text-sm text-ink/60 ml-1">
-                  /{plan.interval === "month" ? "mes" : plan.interval}
-                </span>
-              )}
-            </p>
-            <ul className="space-y-2 text-sm text-ink/70 flex-1">
-              {plan.features.map((f) => (
-                <li key={f} className="flex gap-2">
-                  <span className="text-gold-500">✓</span>
-                  {f}
-                </li>
-              ))}
-            </ul>
-            <button
-              onClick={() => choosePlan(plan)}
-              disabled={busyPlan === plan.id}
-              className={cn("btn-primary w-full mt-6", busyPlan === plan.id && "opacity-60")}
-            >
-              {busyPlan === plan.id ? "Preparando…" : "Seleccionar"}
-            </button>
-          </div>
-        ))}
-      </div>
-
-      <div className="max-w-md mx-auto mt-10 card p-6">
-        <p className="text-sm text-ink/60 mb-3">Método de pago</p>
-        <div className="space-y-2">
-          {PROVIDERS.map((p) => (
-            <label
-              key={p.id}
-              className={cn(
-                "flex items-start gap-3 rounded-xl border p-3 cursor-pointer transition",
-                selectedProvider === p.id
-                  ? "border-gold-300 bg-gold-50"
-                  : "border-ink/10 hover:border-ink/20"
-              )}
-            >
-              <input
-                type="radio"
-                name="provider"
-                value={p.id}
-                checked={selectedProvider === p.id}
-                onChange={() => setSelectedProvider(p.id)}
-                className="mt-1 accent-gold-500"
-              />
-              <span>
-                <span className="block font-medium text-ink">{p.label}</span>
-                <span className="block text-xs text-ink/50">{p.desc}</span>
-              </span>
-            </label>
-          ))}
+          >
+            2
+          </span>
+          <span className={step === "pay" ? "text-ink font-medium" : "text-ink/50"}>Método de pago</span>
         </div>
       </div>
+
+      {step === "plan" ? (
+        <>
+          <h1 className="section-title text-center">Elige tu plan</h1>
+          <p className="text-center text-ink/60 mb-10">
+            {templateId
+              ? "Completa tu pago para personalizar tu invitación."
+              : "Selecciona un plan para empezar."}
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {plans.map((plan, i) => (
+              <div
+                key={plan.id}
+                className={cn(
+                  "card p-8 flex flex-col",
+                  i === 1 && "ring-2 ring-gold-300 scale-[1.03]"
+                )}
+              >
+                {i === 1 && (
+                  <span className="self-start text-xs uppercase tracking-widest bg-gold-100 text-gold-500 px-3 py-1 rounded-full mb-3">
+                    Popular
+                  </span>
+                )}
+                <h2 className="font-serif text-2xl text-ink">{plan.name}</h2>
+                <p className="text-3xl font-serif text-gold-500 my-4">
+                  {formatPrice(plan.price, plan.currency as "mxn" | "usd" | "eur")}
+                  {plan.interval && plan.interval !== "one_time" && (
+                    <span className="text-sm text-ink/60 ml-1">
+                      /{plan.interval === "month" ? "mes" : plan.interval}
+                    </span>
+                  )}
+                </p>
+                <ul className="space-y-2 text-sm text-ink/70 flex-1">
+                  {plan.features.map((f) => (
+                    <li key={f} className="flex gap-2">
+                      <span className="text-gold-500">✓</span>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+                <button
+                  onClick={() => selectPlan(plan)}
+                  className="btn-primary w-full mt-6"
+                >
+                  Seleccionar
+                </button>
+              </div>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          <h1 className="section-title text-center">Elige tu método de pago</h1>
+          <p className="text-center text-ink/60 mb-8">
+            Plan seleccionado:{" "}
+            <strong className="text-ink">{selectedPlan?.name}</strong>
+            {selectedPlan && (
+              <> · {formatPrice(selectedPlan.price, selectedPlan.currency as "mxn" | "usd" | "eur")}</>
+            )}
+          </p>
+
+          <div className="max-w-md mx-auto space-y-3">
+            {PROVIDERS.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setSelectedProvider(p.id)}
+                className={cn(
+                  "w-full flex items-center gap-3 rounded-xl border p-4 text-left transition",
+                  selectedProvider === p.id
+                    ? "border-gold-300 bg-gold-50 ring-1 ring-gold-300"
+                    : "border-ink/10 hover:border-ink/20"
+                )}
+              >
+                <span
+                  className={cn(
+                    "w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0",
+                    selectedProvider === p.id ? "border-gold-500" : "border-ink/20"
+                  )}
+                >
+                  {selectedProvider === p.id && <span className="w-2.5 h-2.5 rounded-full bg-gold-500" />}
+                </span>
+                <span className="flex-1">
+                  <span className="block font-medium text-ink">{p.label}</span>
+                  <span className="block text-xs text-ink/50">{p.desc}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <div className="max-w-md mx-auto mt-8 space-y-3">
+            <button
+              onClick={() => selectedPlan && choosePlan(selectedPlan)}
+              disabled={!!busyPlan}
+              className={cn("btn-primary w-full py-3", busyPlan && "opacity-60")}
+            >
+              {busyPlan
+                ? "Preparando…"
+                : selectedPlan
+                  ? `Pagar ${formatPrice(selectedPlan.price, selectedPlan.currency as "mxn" | "usd" | "eur")}`
+                  : "Pagar"}
+            </button>
+            <button
+              onClick={() => { setStep("plan"); setError(null); }}
+              disabled={!!busyPlan}
+              className="btn-outline w-full"
+            >
+              ← Volver a planes
+            </button>
+          </div>
+        </>
+      )}
 
       {error && <p className="text-center text-red-600 mt-6">{error}</p>}
     </div>

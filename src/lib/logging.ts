@@ -12,16 +12,33 @@ const MAX_BATCH_SIZE = 500; // Firestore batch limit
 let logBatch: LogEntry[] = [];
 let batchTimer: NodeJS.Timeout | null = null;
 
+/** Quita recursivamente valores undefined (Firestore no los acepta). */
+function stripUndefined<T>(value: T): T {
+  if (Array.isArray(value)) return value.map((v) => stripUndefined(v)) as unknown as T;
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (v !== undefined) out[k] = stripUndefined(v);
+    }
+    return out as T;
+  }
+  return value;
+}
+
 /** Escribe logs en lote cada 2s o al alcanzar 500 entradas */
 function flushBatch() {
   if (logBatch.length === 0) return;
-  const batch = adminDb.batch();
   const toWrite = logBatch.splice(0, MAX_BATCH_SIZE);
-  toWrite.forEach((entry) => {
-    const ref = adminDb.collection(LOGS_COLLECTION).doc();
-    batch.set(ref, entry);
-  });
-  batch.commit().catch((err) => console.error("[Logging] Batch commit failed:", err));
+  try {
+    const batch = adminDb.batch();
+    toWrite.forEach((entry) => {
+      const ref = adminDb.collection(LOGS_COLLECTION).doc();
+      batch.set(ref, entry);
+    });
+    batch.commit().catch((err) => console.error("[Logging] Batch commit failed:", err));
+  } catch (err) {
+    console.error("[Logging] Batch set failed:", err);
+  }
 }
 
 /** Añade entrada a la cola y programa flush */
@@ -51,7 +68,7 @@ export async function log(params: {
   ip?: string;
   userAgent?: string;
 }) {
-  const entry: LogEntry = {
+  const entry: LogEntry = stripUndefined({
     id: crypto.randomUUID(),
     action: params.action,
     timestamp: Date.now(),
@@ -65,7 +82,7 @@ export async function log(params: {
     description: params.description,
     ip: params.ip,
     userAgent: params.userAgent,
-  };
+  });
 
   // En entorno servidor (Node), usa batch directo
   if (typeof window === "undefined") {
@@ -88,7 +105,7 @@ export async function log(params: {
 /** Versión síncrona para server-side (no await) */
 export function logSync(params: Parameters<typeof log>[0]) {
   if (typeof window === "undefined") {
-    enqueue({
+    enqueue(stripUndefined({
       id: crypto.randomUUID(),
       action: params.action,
       timestamp: Date.now(),
@@ -102,7 +119,7 @@ export function logSync(params: Parameters<typeof log>[0]) {
       description: params.description,
       ip: params.ip,
       userAgent: params.userAgent,
-    });
+    }));
   }
 }
 
@@ -176,6 +193,39 @@ export const LogHelper = {
       targetType: "invitation",
       userId,
       description: "Invitación publicada",
+    }),
+
+  invitationUnpublished: (invitationId: string, reason: string, userId?: string) =>
+    log({
+      action: "invitation.unpublished",
+      targetId: invitationId,
+      targetType: "invitation",
+      userId,
+      metadata: { reason },
+      description:
+        reason === "event_expired"
+          ? "Invitación despublicada automáticamente por vigencia (evento + 1 día)"
+          : `Invitación despublicada: ${reason}`,
+    }),
+
+  invitationRetained: (invitationId: string, userId?: string) =>
+    log({
+      action: "invitation.retained",
+      targetId: invitationId,
+      targetType: "invitation",
+      userId,
+      description: "El cliente conservó la invitación (no se borrará automáticamente)",
+    }),
+
+  invitationDeleted: (invitationId: string, reason: string, userId?: string) =>
+    log({
+      action: "invitation.deleted",
+      targetId: invitationId,
+      targetType: "invitation",
+      userId,
+      metadata: { reason },
+      severity: "warning",
+      description: `Invitación eliminada: ${reason}`,
     }),
 
   settingsUpdated: (userId: string, sections: string[]) =>

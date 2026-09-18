@@ -16,13 +16,71 @@ import {
 import { serverDb } from "./firebase/serverClient";
 import { adminDb } from "./firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
+import { LogHelper } from "./logging";
+import { isInvitationExpired } from "./invitationValidity";
+import { getPlanFeatures, RETENTION_GRACE_MS } from "./plans";
 import type {
   Invitation,
   Order,
+  PlanFeatures,
   Rsvp,
   QuizResponse,
   Template,
 } from "./types";
+
+/**
+ * Despublica una invitación (status → draft). Usado por la vigencia.
+ * Best-effort: si no hay Admin SDK disponible, el guard de lectura la oculta igual.
+ */
+export async function unpublishInvitation(
+  invitationId: string,
+  reason = "event_expired"
+): Promise<void> {
+  const now = Date.now();
+  await adminDb.collection("invitations").doc(invitationId).update({
+    status: "draft",
+    unpublishedAt: now,
+    unpublishedReason: reason,
+    // Se eliminará tras la gracia, salvo que el cliente la conserve.
+    deleteAfter: now + RETENTION_GRACE_MS,
+  });
+  await LogHelper.invitationUnpublished(invitationId, reason);
+}
+
+/** Marca una invitación para conservarla (no se borra automáticamente). */
+export async function retainInvitation(
+  invitationId: string,
+  userId?: string
+): Promise<void> {
+  await adminDb.collection("invitations").doc(invitationId).update({
+    retain: true,
+    retainedAt: Date.now(),
+    deleteAfter: FieldValue.delete(),
+  });
+  await LogHelper.invitationRetained(invitationId, userId);
+}
+
+/** Borra una invitación y sus subcolecciones (rsvps, quizResponses). */
+export async function deleteInvitationDeep(
+  invitationId: string,
+  reason = "retention_expired",
+  userId?: string
+): Promise<void> {
+  const invRef = adminDb.collection("invitations").doc(invitationId);
+  for (const sub of ["rsvps", "quizResponses"] as const) {
+    // Borra por lotes hasta vaciar la subcolección.
+    for (;;) {
+      const snap = await invRef.collection(sub).limit(300).get();
+      if (snap.empty) break;
+      const batch = adminDb.batch();
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+      if (snap.size < 300) break;
+    }
+  }
+  await invRef.delete();
+  await LogHelper.invitationDeleted(invitationId, reason, userId);
+}
 
 /** Busca una invitación publicada por slug (usado en /i/[slug] SSR). */
 export async function getPublishedInvitationBySlug(
@@ -36,7 +94,20 @@ export async function getPublishedInvitationBySlug(
   );
   const snap = await getDocs(q);
   if (snap.empty) return null;
-  return snap.docs[0].data() as Invitation;
+  const doc = snap.docs[0];
+  const inv = doc.data() as Invitation;
+
+  // Vigencia: si el evento ya pasó (evento + 1 día), despublica y oculta.
+  if (isInvitationExpired(inv)) {
+    try {
+      await unpublishInvitation(doc.id, "event_expired");
+    } catch (err) {
+      console.warn("[Vigencia] No se pudo despublicar invitación vencida:", err);
+    }
+    return null;
+  }
+
+  return inv;
 }
 
 /** Incrementa contadores de vistas (Admin SDK; best-effort en el webhook). */
@@ -72,7 +143,8 @@ export async function cloneTemplateToInvitation(params: {
   templateId: string;
   slug: string;
   planId: string;
-  orderId: string;
+  orderId: string | null;
+  features?: PlanFeatures;
 }): Promise<string> {
   const template = await getTemplateAdmin(params.templateId);
   if (!template) throw new Error("Plantilla no encontrada");
@@ -90,7 +162,9 @@ export async function cloneTemplateToInvitation(params: {
     status: "draft",
     createdAt: now,
     orderId: params.orderId,
-    tier: "free", // NUEVO: por defecto free
+    planId: params.planId || undefined,
+    tier: params.planId ? "premium" : "free",
+    features: params.features ?? getPlanFeatures(params.planId),
     tierUpdatedAt: now,
     builderConfig: template.builderConfig,
     stats: { views: 0, uniqueViews: 0 },

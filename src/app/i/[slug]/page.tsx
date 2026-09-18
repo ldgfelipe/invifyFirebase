@@ -8,6 +8,7 @@ import { getPublishedInvitationBySlug } from "@/lib/firestore";
 import { InvitationRenderer } from "@/components/invitation/InvitationRenderer";
 import { ViewCounter } from "@/components/invitation/ViewCounter";
 import { invitationUrl } from "@/lib/seo";
+import { getInvitationFeatures } from "@/lib/plans";
 
 // ISR: regenera la página cada 5 min (rápida + fresca para SEO).
 export const revalidate = 300;
@@ -75,7 +76,12 @@ export default async function InvitationPage({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <ViewCounter invitationId={inv.id} />
-      <InvitationRenderer config={inv.builderConfig} invitationId={inv.id} tier={inv.tier ?? "free"} />
+      <InvitationRenderer
+        config={inv.builderConfig}
+        invitationId={inv.id}
+        tier={inv.tier ?? "free"}
+        features={getInvitationFeatures(inv)}
+      />
     </>
   );
 }

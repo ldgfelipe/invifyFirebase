@@ -5,7 +5,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { doc, getDoc, addDoc, collection } from "firebase/firestore";
 import { serverDb } from "@/lib/firebase/serverClient";
 import { checkRateLimit } from "@/lib/rateLimit";
-import type { QuizResponse } from "@/lib/types";
+import { isInvitationExpired } from "@/lib/invitationValidity";
+import { getInvitationFeatures } from "@/lib/plans";
+import type { Invitation, QuizResponse } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   const ip =
@@ -36,6 +38,15 @@ export async function POST(req: NextRequest) {
   const invSnap = await getDoc(doc(serverDb, "invitations", invitationId));
   if (!invSnap.exists || (invSnap.data() as any).status !== "published") {
     return NextResponse.json({ error: "Invitación no disponible" }, { status: 404 });
+  }
+  if (isInvitationExpired(invSnap.data() as any)) {
+    return NextResponse.json({ error: "La invitación ha finalizado" }, { status: 410 });
+  }
+  if (!getInvitationFeatures(invSnap.data() as Invitation).quiz) {
+    return NextResponse.json(
+      { error: "El Quiz no está incluido en el plan de esta invitación" },
+      { status: 403 }
+    );
   }
 
   const response: QuizResponse = {

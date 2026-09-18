@@ -2,7 +2,8 @@
 // INVITATION RENDERER - Renderiza el builderConfig (array de módulos) en orden.
 // Componente de servidor: orquesta módulos (algunos client, otros estáticos).
 // ============================================================================
-import type { BuilderConfig, InvitationModule } from "@/lib/types";
+import type { BuilderConfig, InvitationModule, PlanFeatures } from "@/lib/types";
+import { isModuleAllowed, FREE_FEATURES } from "@/lib/plans";
 import { ConditionalPreloader } from "./ConditionalPreloader";
 import { Header } from "./Header";
 import { Countdown } from "./Countdown";
@@ -15,9 +16,17 @@ import { GiftTable } from "./GiftTable";
 import { Quiz } from "./Quiz";
 import { RsvpForm } from "./Rsvp";
 
-function renderModule(module: InvitationModule, invitationId: string, demo: boolean) {
+function renderModule(
+  module: InvitationModule,
+  invitationId: string,
+  demo: boolean,
+  features: PlanFeatures
+) {
   // Módulos no visibles se omiten (config del editor).
   if (!module.visible) return null;
+
+  // Módulos fuera del plan no se renderizan (RSVP/Quiz/Música).
+  if (!demo && !isModuleAllowed(module.type, features)) return null;
 
   // El preloader se maneja en ConditionalPreloader, lo omitimos aquí
   if (module.type === "preloader") return null;
@@ -53,11 +62,13 @@ export function InvitationRenderer({
   invitationId,
   demo = false,
   tier = "free",
+  features = FREE_FEATURES,
 }: {
   config: BuilderConfig;
   invitationId: string;
   demo?: boolean;
   tier?: "free" | "premium";
+  features?: PlanFeatures;
 }) {
   // Aplica color temático global vía CSS variable.
   const themeStyle = {
@@ -76,7 +87,7 @@ export function InvitationRenderer({
         preloaderConfig={preloaderModule}
       >
         {config.modules.map((m) => (
-          <div key={m.id}>{renderModule(m, invitationId, demo)}</div>
+          <div key={m.id}>{renderModule(m, invitationId, demo, features)}</div>
         ))}
       </ConditionalPreloader>
     </main>

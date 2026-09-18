@@ -6,9 +6,42 @@
 export const PROYECTO_KEY = "invify-online";
 
 export const PLANS = [
-  { id: "plan_basic", name: "Básico", price: 15000, currency: "mxn", features: ["1 invitación activa", "URL /i/slug propia", "Soporte de 1 tema"] },
-  { id: "plan_pro", name: "Pro", price: 32000, currency: "mxn", features: ["5 invitaciones activas", "RSVP + Quiz + Música", "Estadísticas de vistas"] },
-  { id: "plan_premium", name: "Premium", price: 49000, currency: "mxn", features: ["Invitaciones ilimitadas", "Todo el catálogo de temas", "Soporte prioritario"] },
+  {
+    id: "plan_basic",
+    name: "Básico",
+    price: 15000,
+    currency: "mxn",
+    interval: "one_time",
+    features: ["1 invitación activa", "URL /i/slug propia", "Soporte de 1 tema"],
+    entitlement: {
+      quota: 1,
+      features: { rsvp: false, quiz: false, audio: false, stats: false, allTemplates: false, prioritySupport: false },
+    },
+  },
+  {
+    id: "plan_pro",
+    name: "Pro",
+    price: 32000,
+    currency: "mxn",
+    interval: "one_time",
+    features: ["5 invitaciones activas", "RSVP + Quiz + Música", "Estadísticas de vistas"],
+    entitlement: {
+      quota: 5,
+      features: { rsvp: true, quiz: true, audio: true, stats: true, allTemplates: false, prioritySupport: false },
+    },
+  },
+  {
+    id: "plan_premium",
+    name: "Premium",
+    price: 49000,
+    currency: "mxn",
+    interval: "month",
+    features: ["Invitaciones ilimitadas", "Todo el catálogo de temas", "Soporte prioritario"],
+    entitlement: {
+      quota: "unlimited",
+      features: { rsvp: true, quiz: true, audio: true, stats: true, allTemplates: true, prioritySupport: true },
+    },
+  },
 ];
 
 export function siteConfig() {

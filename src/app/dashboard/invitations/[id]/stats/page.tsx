@@ -20,6 +20,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import type { Invitation, Rsvp, QuizResponse } from "@/lib/types";
+import { getInvitationFeatures } from "@/lib/plans";
 import { invitationUrl, whatsappShareUrl, emailShareUrl } from "@/lib/seo";
 
 export default function StatsPage() {
@@ -70,6 +71,27 @@ export default function StatsPage() {
   }
 
   if (!inv) return <p className="text-ink/60">Cargando…</p>;
+
+  if (!getInvitationFeatures(inv).stats) {
+    return (
+      <div className="card p-10 text-center max-w-lg mx-auto">
+        <p className="text-4xl">📊</p>
+        <h1 className="section-title mt-4">Estadísticas no disponibles</h1>
+        <p className="text-ink/60 mt-2">
+          Las estadísticas de vistas están incluidas en el plan Pro y Premium.
+        </p>
+        <Link href="/pricing" className="btn-primary mt-6 inline-block">
+          Mejorar plan
+        </Link>
+        <div className="mt-4">
+          <Link href="/dashboard" className="text-sm text-ink/60 hover:text-gold-500">
+            ← Volver
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const url = invitationUrl(inv.slug);
 
   return (

@@ -7,6 +7,11 @@ import { adminDb } from "@/lib/firebase/admin";
 import { cloneTemplateToInvitation } from "@/lib/firestore";
 import { generateUniqueSlug } from "@/lib/slug";
 import { LogHelper, log } from "@/lib/logging";
+import {
+  resolvePlanEntitlements,
+  mergeEntitlements,
+} from "@/lib/plans";
+import type { UserEntitlements } from "@/lib/types";
 
 export async function processPaymentSuccess(params: {
   orderId: string;
@@ -64,18 +69,39 @@ export async function processPaymentSuccess(params: {
     return !snap.empty;
   });
 
+  // Entitlements efectivos del plan comprado (catálogo + override en /plans).
+  const planSnap = await adminDb.collection("plans").doc(order.planId ?? "").get();
+  const planData = planSnap.exists ? (planSnap.data() as any) : null;
+  const planEnt = resolvePlanEntitlements(order.planId, planData);
+
   const invitationId = await cloneTemplateToInvitation({
     ownerUid: params.uid,
     templateId: params.templateId,
     slug,
     planId: order.planId ?? "",
     orderId: params.orderId,
+    features: planEnt?.features,
   });
 
   await adminDb.collection("invitations").doc(invitationId).update({
     tier: "premium",
     tierUpdatedAt: Date.now(),
   });
+
+  // Otorga/actualiza los entitlements de la cuenta (cupo + features + temas).
+  if (planEnt) {
+    const userRef = adminDb.collection("users").doc(params.uid);
+    const userSnap = await userRef.get();
+    const current = (userSnap.data() as any)?.entitlements as
+      | UserEntitlements
+      | undefined;
+    const merged = mergeEntitlements({
+      current: current ?? null,
+      plan: planEnt,
+      templateId: params.templateId,
+    });
+    await userRef.set({ entitlements: merged }, { merge: true });
+  }
 
   await orderRef.update({
     status: "paid",

@@ -48,7 +48,16 @@ export default function AdminSiteSettings() {
       if (activeTab === "paypal") changedSections.push("paypal_keys");
       if (activeTab === "mercadopago") changedSections.push("mercadopago_keys");
 
-      await setDoc(doc(db, "site", "config"), form);
+      await setDoc(doc(db, "site", "config"), form, { merge: true });
+
+      // Compat: limpia localStorage obsoleto (PricingFlow ya usa API, no localStorage)
+      try {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("stripeTestMode");
+          // Opcional: sincroniza por si hay tabs viejos abiertos
+          localStorage.setItem("stripeTestMode", String(form.stripeTestMode));
+        }
+      } catch {}
 
       // Log cliente
       await fetch("/api/logs", {
