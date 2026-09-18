@@ -11,7 +11,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import Stripe from "stripe";
-import { PLANS, demoTemplate, siteConfig, toFirestoreValue, toDocPath, PROYECTO_KEY } from "./seedData.mjs";
+import { PLANS, TEMPLATES, siteConfig, toFirestoreValue, toDocPath, PROYECTO_KEY } from "./seedData.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -98,8 +98,8 @@ async function main() {
   }
   await commitBatched(batchPlans, "planes");
 
-  console.log("== Plantilla demo ==");
-  await commitBatched([upsert("templates/demo-boda", demoTemplate())], "template demo");
+  console.log("== Plantillas (catálogo 30) ==");
+  await commitBatched(TEMPLATES.map((t) => upsert(`templates/${t.id}`, t)), "plantillas 30");
 
   console.log("== Config del sitio ==");
   await commitBatched([upsert("site/config", siteConfig())], "site config");

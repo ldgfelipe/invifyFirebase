@@ -23,7 +23,7 @@ import { fileURLToPath } from "node:url";
 import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
-import { PLANS, demoTemplate, siteConfig } from "./seedData.mjs";
+import { PLANS, TEMPLATES, siteConfig } from "./seedData.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -92,9 +92,11 @@ async function seedPlans() {
 }
 
 async function seedTemplate() {
-  console.log("== Plantilla demo ==");
-  await db.collection("templates").doc("demo-boda").set(demoTemplate(), { merge: true });
-  console.log("  ✓ /templates/demo-boda");
+  console.log("== Plantillas (catálogo 30) ==");
+  for (const tpl of TEMPLATES) {
+    await db.collection("templates").doc(tpl.id).set(tpl, { merge: true });
+    console.log(`  ✓ /templates/${tpl.id} (${tpl.category})`);
+  }
 }
 
 async function seedSiteConfig() {

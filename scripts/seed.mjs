@@ -23,7 +23,7 @@ import { fileURLToPath } from "node:url";
 import { initializeApp, cert, getApps } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import Stripe from "stripe";
-import { PLANS, demoTemplate, siteConfig } from "./seedData.mjs";
+import { PLANS, TEMPLATES, siteConfig } from "./seedData.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -105,9 +105,11 @@ async function main() {
     console.log(`  [Firestore] /plans/${plan.id}`);
   }
 
-  console.log("== Plantilla demo ==");
-  await db.collection("templates").doc("demo-boda").set(demoTemplate(), { merge: true });
-  console.log("  [Firestore] /templates/demo-boda");
+  console.log("== Plantillas (catálogo 30) ==");
+  for (const tpl of TEMPLATES) {
+    await db.collection("templates").doc(tpl.id).set(tpl, { merge: true });
+    console.log(`  [Firestore] /templates/${tpl.id} (${tpl.category})`);
+  }
 
   console.log("== Config del sitio ==");
   await db.collection("site").doc("config").set(siteConfig(), { merge: true });

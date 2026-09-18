@@ -262,9 +262,16 @@ function ImageField({ label, value = "", onChange }: { label: string; value?: st
       />
       {preview && (
         <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-ink/10">
-          <img src={preview} alt="Preview" className="w-full h-full object-cover" />
+          <img src={preview} alt="Preview" className="w-full h-full object-cover" onError={() => setPreview(null)} />
         </div>
       )}
+      <p className="text-[11px] leading-snug text-ink/45 bg-ink/5 rounded-lg px-2.5 py-2">
+        💡 <strong>¿Dónde subo mi imagen gratis?</strong> Usa{" "}
+        <a href="https://imgbb.com" target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:underline">imgbb.com</a>,{" "}
+        <a href="https://postimages.org" target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:underline">postimages.org</a>,{" "}
+        <a href="https://catbox.moe" target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:underline">catbox.moe</a> o{" "}
+        <a href="https://imgur.com/upload" target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:underline">imgur.com</a> — sube y pega aquí la <em>URL directa</em> (.jpg/.png).
+      </p>
     </div>
   );
 }
@@ -314,6 +321,9 @@ function CarouselEditor({
         >
           + Añadir imagen
         </button>
+        <p className="text-[11px] text-ink/45 bg-ink/5 rounded-lg px-2.5 py-2">
+          💡 Sube gratis en <a href="https://imgbb.com" target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:underline">imgbb.com</a> / <a href="https://postimages.org" target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:underline">postimages.org</a> / <a href="https://catbox.moe" target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:underline">catbox.moe</a> y pega la URL directa.
+        </p>
       </div>
     </div>
   );
