@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase/client";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
-import { getInvitationFeatures, isModuleAllowed, FREE_FEATURES } from "@/lib/plans";
+import { getInvitationFeatures, isModuleAllowed, filterBuilderConfig, FREE_FEATURES } from "@/lib/plans";
 import type { Invitation, BuilderConfig, InvitationModule } from "@/lib/types";
 import { EditorSidebar } from "@/components/editor/EditorSidebar";
 import { EditorCanvas } from "@/components/editor/EditorCanvas";
@@ -102,10 +102,17 @@ export default function InvitationEditorPage() {
     setSaving(true);
     setError(null);
     try {
+      // Filtra módulos no permitidos por el plan antes de guardar (Básico sin RSVP/Quiz/Audio)
+      const sanitized = filterBuilderConfig(config, features);
+      const blocked = config.modules.length - sanitized.modules.length;
+      if (blocked > 0) {
+        setError(`Se omitieron ${blocked} módulo(s) no incluidos en tu plan (Pro/Premium).`);
+      }
       await updateDoc(doc(db, "invitations", id), {
-        builderConfig: config,
-        themeColor: config.theme.primaryColor,
+        builderConfig: sanitized,
+        themeColor: sanitized.theme.primaryColor,
       });
+      if (blocked > 0) setConfig(sanitized);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err: any) {

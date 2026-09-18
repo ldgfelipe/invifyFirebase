@@ -18,7 +18,7 @@ import { adminDb } from "./firebase/admin";
 import { FieldValue } from "firebase-admin/firestore";
 import { LogHelper } from "./logging";
 import { isInvitationExpired } from "./invitationValidity";
-import { getPlanFeatures, RETENTION_GRACE_MS } from "./plans";
+import { getPlanFeatures, RETENTION_GRACE_MS, filterBuilderConfig } from "./plans";
 import type {
   Invitation,
   Order,
@@ -152,21 +152,25 @@ export async function cloneTemplateToInvitation(params: {
   const invitationRef = adminDb.collection("invitations").doc();
   const now = Date.now();
 
+  const features = params.features ?? getPlanFeatures(params.planId);
+  // Básico no incluye RSVP/Quiz/Música → filtrar módulos no permitidos al clonar
+  const filteredConfig = filterBuilderConfig(template.builderConfig, features);
+
   const invitation: Invitation = {
     id: invitationRef.id,
     ownerUid: params.ownerUid,
     templateId: params.templateId,
     title: template.name,
     slug: params.slug,
-    themeColor: template.builderConfig.theme.primaryColor,
+    themeColor: filteredConfig.theme.primaryColor,
     status: "draft",
     createdAt: now,
     orderId: params.orderId,
     planId: params.planId || undefined,
     tier: params.planId ? "premium" : "free",
-    features: params.features ?? getPlanFeatures(params.planId),
+    features,
     tierUpdatedAt: now,
-    builderConfig: template.builderConfig,
+    builderConfig: filteredConfig,
     stats: { views: 0, uniqueViews: 0 },
   };
 

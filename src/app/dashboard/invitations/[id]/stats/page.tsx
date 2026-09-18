@@ -50,10 +50,6 @@ export default function StatsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, id]);
 
-  const totalViews = inv?.stats.views ?? 0;
-  const totalPax = rsvps.reduce((s, r) => s + r.personas, 0);
-  const quizzesDone = quizzes.length;
-
   async function resetData() {
     if (!confirm("¿Reiniciar todos los datos de RSVP y quiz?")) return;
     setResetting(true);
@@ -73,7 +69,12 @@ export default function StatsPage() {
 
   if (!inv) return <p className="text-ink/60">Cargando…</p>;
 
-  if (!getInvitationFeatures(inv).stats) {
+  const features = getInvitationFeatures(inv);
+  const totalViews = inv.stats.views ?? 0;
+  const totalPax = features.rsvp ? rsvps.reduce((s, r) => s + r.personas, 0) : 0;
+  const quizzesDone = features.quiz ? quizzes.length : 0;
+
+  if (!features.stats) {
     return (
       <div className="card p-10 text-center max-w-lg mx-auto">
         <p className="text-4xl">📊</p>
@@ -125,59 +126,86 @@ export default function StatsPage() {
         <Kpi label="Quiz completados" value={quizzesDone} />
       </div>
 
-      {/* Tabla de asistencia */}
-      <section className="card p-6 mb-8">
-        <h2 className="font-serif text-xl text-ink mb-4">Tabla de asistencia</h2>
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-ink/60 border-b border-ink/10">
-              <th className="py-2">Nombre</th>
-              <th>Email</th>
-              <th>Personas</th>
-              <th>Fecha</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rsvps.map((r, i) => (
-              <tr key={i} className="border-b border-ink/5">
-                <td className="py-2">{r.nombre}</td>
-                <td>{r.email}</td>
-                <td>{r.personas}</td>
-                <td>{new Date(r.fecha).toLocaleDateString()}</td>
+      {/* Tabla de asistencia - solo Pro/Premium (features.rsvp) */}
+      {features.rsvp ? (
+        <section className="card p-6 mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-serif text-xl text-ink">📋 Lista de invitados (RSVP)</h2>
+            <button onClick={() => window.print()} className="btn-outline text-sm px-3 py-1.5">
+              🖨️ Imprimir lista
+            </button>
+          </div>
+          <p className="text-xs text-ink/50 mb-4">Total pax: {totalPax} · Confirmaciones: {rsvps.length}</p>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-ink/60 border-b border-ink/10">
+                <th className="py-2">Nombre</th>
+                <th>Email</th>
+                <th>Personas</th>
+                <th>Fecha</th>
               </tr>
-            ))}
-            {rsvps.length === 0 && (
-              <tr>
-                <td colSpan={4} className="py-4 text-ink/50 text-center">
-                  Aún no hay confirmaciones.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </section>
+            </thead>
+            <tbody>
+              {rsvps.map((r, i) => (
+                <tr key={i} className="border-b border-ink/5">
+                  <td className="py-2">{r.nombre}</td>
+                  <td>{r.email}</td>
+                  <td>{r.personas}</td>
+                  <td>{new Date(r.fecha).toLocaleDateString()}</td>
+                </tr>
+              ))}
+              {rsvps.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="py-4 text-ink/50 text-center">
+                    Aún no hay confirmaciones.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </section>
+      ) : (
+        <section className="card p-6 mb-8 border-dashed border-ink/20 bg-ink/5">
+          <h2 className="font-serif text-lg text-ink/60">🔒 Lista de invitados bloqueada</h2>
+          <p className="text-sm text-ink/50 mt-2">El plan <strong>Básico</strong> no incluye RSVP. Los módulos RSVP/Quiz/Música solo están en <strong>Pro</strong> y <strong>Premium</strong>.</p>
+          <Link href="/pricing" className="btn-primary mt-4 inline-block text-sm">Ver planes Pro/Premium</Link>
+        </section>
+      )}
 
-      {/* Respuestas de quiz */}
-      <section className="card p-6">
-        <h2 className="font-serif text-xl text-ink mb-4">Respuestas del quiz</h2>
-        <div className="space-y-4">
-          {quizzes.map((q, i) => (
-            <div key={i} className="border-b border-ink/5 pb-3">
-              <p className="text-xs text-ink/50">{new Date(q.fecha).toLocaleString()}</p>
-              <ul className="text-sm mt-1">
-                {Object.entries(q.datos).map(([k, v]) => (
-                  <li key={k}>
-                    <span className="text-ink/60">{k}:</span> {v}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-          {quizzes.length === 0 && (
-            <p className="text-ink/50 text-center py-4">Sin respuestas aún.</p>
-          )}
-        </div>
-      </section>
+      {/* Respuestas de quiz - solo Pro/Premium (features.quiz) */}
+      {features.quiz ? (
+        <section className="card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-serif text-xl text-ink">❓ Resultados del Quiz</h2>
+            <button onClick={() => window.print()} className="btn-outline text-sm px-3 py-1.5">
+              🖨️ Imprimir resultados
+            </button>
+          </div>
+          <div className="space-y-4">
+            {quizzes.map((q, i) => (
+              <div key={i} className="border-b border-ink/5 pb-3">
+                <p className="text-xs text-ink/50">{new Date(q.fecha).toLocaleString()}</p>
+                <ul className="text-sm mt-1">
+                  {Object.entries(q.datos).map(([k, v]) => (
+                    <li key={k}>
+                      <span className="text-ink/60">{k}:</span> {v}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+            {quizzes.length === 0 && (
+              <p className="text-ink/50 text-center py-4">Sin respuestas aún.</p>
+            )}
+          </div>
+        </section>
+      ) : (
+        <section className="card p-6 border-dashed border-ink/20 bg-ink/5">
+          <h2 className="font-serif text-lg text-ink/60">🔒 Quiz bloqueado</h2>
+          <p className="text-sm text-ink/50 mt-2">El plan <strong>Básico</strong> no incluye Quiz. Disponible en <strong>Pro</strong> y <strong>Premium</strong>.</p>
+          <Link href="/pricing" className="btn-primary mt-4 inline-block text-sm">Ver planes Pro/Premium</Link>
+        </section>
+      )}
     </div>
   );
 }

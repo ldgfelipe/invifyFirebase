@@ -161,6 +161,25 @@ export function isModuleAllowed(
   }
 }
 
+/** Filtra un BuilderConfig quitando módulos no permitidos por el plan. */
+export function filterBuilderConfig(
+  config: import("./types").BuilderConfig,
+  features: PlanFeatures
+): import("./types").BuilderConfig {
+  return {
+    ...config,
+    modules: config.modules.filter((m) => isModuleAllowed(m.type, features)),
+  };
+}
+
+/** ¿Cuántos módulos gateados serían eliminados? (para mensajes al usuario). */
+export function countBlockedModules(
+  config: import("./types").BuilderConfig,
+  features: PlanFeatures
+): number {
+  return config.modules.filter((m) => !isModuleAllowed(m.type, features)).length;
+}
+
 /** Jerarquía de un plan según su cupo (ilimitado gana). */
 function planRank(quota: number | "unlimited"): number {
   return quota === "unlimited" ? Number.POSITIVE_INFINITY : quota;

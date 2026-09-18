@@ -16,7 +16,7 @@ import {
 } from "firebase/firestore";
 import type { Invitation, Order, Template, UserEntitlements } from "@/lib/types";
 import { isInvitationActive } from "@/lib/invitationValidity";
-import { formatQuota } from "@/lib/plans";
+import { formatQuota, getInvitationFeatures } from "@/lib/plans";
 import { ShareMenu } from "@/components/invitation/ShareMenu";
 import { cn } from "@/lib/cn";
 
@@ -407,6 +407,15 @@ export default function MyInvitationsPage() {
                 Ver
               </Link>
               <ShareMenu slug={inv.slug} title={inv.title} />
+              {getInvitationFeatures(inv).stats ? (
+                <Link href={`/dashboard/invitations/${inv.id}/stats`} className="btn-outline text-sm px-3 py-2">
+                  📋 Invitados / Quiz
+                </Link>
+              ) : (
+                <Link href="/pricing" className="btn-outline text-sm px-3 py-2 opacity-60" title="Disponible en Pro/Premium">
+                  🔒 Invitados (Pro)
+                </Link>
+              )}
             </div>
           </div>
         ))}

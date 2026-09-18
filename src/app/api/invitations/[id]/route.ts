@@ -12,7 +12,7 @@ import {
 } from "@/lib/entitlements";
 import { retainInvitation } from "@/lib/firestore";
 import { LogHelper } from "@/lib/logging";
-import { RETENTION_GRACE_MS } from "@/lib/plans";
+import { RETENTION_GRACE_MS, filterBuilderConfig, getInvitationFeatures } from "@/lib/plans";
 import type { Invitation } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -77,7 +77,15 @@ export async function PATCH(
         );
       }
     }
-    await invRef.update({ status: "published" });
+    // Sanitiza builderConfig: quita RSVP/Quiz/Audio si el plan no lo incluye (Básico)
+    const features = getInvitationFeatures(inv);
+    const sanitized = filterBuilderConfig(inv.builderConfig, features);
+    const patch: Record<string, unknown> = { status: "published" };
+    if (sanitized.modules.length !== inv.builderConfig.modules.length) {
+      patch.builderConfig = sanitized;
+      patch.themeColor = sanitized.theme.primaryColor;
+    }
+    await invRef.update(patch);
     await LogHelper.invitationPublished(params.id, uid);
   } else if (body.status === "draft") {
     // Despublicación manual: no programa borrado (solo la vigencia lo hace).
