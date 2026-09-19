@@ -2,6 +2,9 @@
 
 import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/cn";
+import { useAuth } from "@/context/AuthContext";
+import { ImageBank } from "./ImageBank";
+import { uploadFileAsWebp } from "@/lib/imageUpload";
 import type { InvitationModule, BuilderConfig, ModuleStyle } from "@/lib/types";
 
 interface EditorPanelProps {
@@ -53,10 +56,33 @@ export function EditorPanel({ module, config, onUpdate, onRemove, theme, onTheme
         </div>
       </details>
 
+      {/* Fondo de la invitación (nuevo: color o imagen) */}
+      <details className="group" open>
+        <summary className="flex items-center gap-2 cursor-pointer text-sm font-medium text-ink/70">
+          <span className="text-blue-500">🖌️</span> Fondo de la invitación
+          <span className="text-xs text-ink/40 ml-auto">color o imagen</span>
+        </summary>
+        <div className="mt-4 space-y-4 p-4 bg-blue-50/50 rounded-lg border border-blue-100">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-ink/70">Color fondo</label>
+              <input type="color" value={theme.background} onChange={(e) => onThemeChange({ background: e.target.value })} className="w-12 h-10 mt-1 rounded border border-ink/15" />
+            </div>
+            <div>
+              <label className="text-xs text-ink/70">Color texto</label>
+              <input type="color" value={(theme as any).textColor ?? "#000000"} onChange={(e) => onThemeChange({ textColor: e.target.value } as any)} className="w-12 h-10 mt-1 rounded border border-ink/15" />
+            </div>
+          </div>
+          <ImageField label="Imagen de fondo (opcional)" value={(theme as any).backgroundImage ?? ""} onChange={(v) => onThemeChange({ backgroundImage: v } as any)} />
+          <Field label="Overlay fondo (ej. rgba(0,0,0,0.3))" value={(theme as any).backgroundOverlay ?? ""} onChange={(v) => onThemeChange({ backgroundOverlay: v } as any)} placeholder="rgba(0,0,0,0.3) o vacío" />
+          <p className="text-[11px] text-ink/40">Se guarda en la plantilla que estás editando. Si es plan Básico, los módulos Pro (RSVP/Quiz/Música) se ocultan al publicar pero tu fondo y texto libre se conservan.</p>
+        </div>
+      </details>
+
       {/* Tema global (siempre visible al final) */}
       <details className="group">
         <summary className="flex items-center gap-2 cursor-pointer text-sm font-medium text-ink/70">
-          <span className="text-gold-500">🎨</span> Tema global
+          <span className="text-gold-500">🎨</span> Tema global (avanzado)
         </summary>
         <div className="mt-4 space-y-4 p-4 bg-ink/5 rounded-lg">
           <div>
@@ -302,6 +328,43 @@ function Field({
 
 function ImageField({ label, value = "", onChange }: { label: string; value?: string; onChange: (v: string) => void }) {
   const [preview, setPreview] = useState<string | null>(value || null);
+  const [showBank, setShowBank] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState<string | null>(null);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    setPreview(value || null);
+  }, [value]);
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!user) {
+      setUploadErr("Debes estar autenticado para subir.");
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setUploadErr("Solo imágenes (jpg/png/webp).");
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      setUploadErr("Máx 8MB antes de convertir.");
+      return;
+    }
+    setUploading(true);
+    setUploadErr(null);
+    try {
+      const url = await uploadFileAsWebp(file, user.uid);
+      onChange(url);
+      setPreview(url);
+    } catch (err: any) {
+      setUploadErr(err.message ?? "Error al subir");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  }
 
   return (
     <div className="space-y-2">
@@ -313,18 +376,25 @@ function ImageField({ label, value = "", onChange }: { label: string; value?: st
         onChange={(e) => { onChange(e.target.value); setPreview(e.target.value); }}
         placeholder="https://... (URL directa de imagen)"
       />
+      <div className="flex gap-2">
+        <button type="button" onClick={() => setShowBank(true)} className="btn-outline text-xs px-3 py-1.5 flex-1">
+          🖼️ Banco gratis
+        </button>
+        <label className={`btn-outline text-xs px-3 py-1.5 flex-1 text-center cursor-pointer ${uploading ? "opacity-60" : ""}`}>
+          {uploading ? "Convirtiendo a .webp..." : "⬆️ Subir (→ .webp)"}
+          <input type="file" accept="image/*" className="hidden" onChange={handleFile} disabled={uploading} />
+        </label>
+      </div>
+      {uploadErr && <p className="text-xs text-red-600">{uploadErr}</p>}
       {preview && (
         <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-ink/10">
           <img src={preview} alt="Preview" className="w-full h-full object-cover" onError={() => setPreview(null)} />
         </div>
       )}
       <p className="text-[11px] leading-snug text-ink/45 bg-ink/5 rounded-lg px-2.5 py-2">
-        💡 <strong>¿Dónde subo mi imagen gratis?</strong> Usa{" "}
-        <a href="https://imgbb.com" target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:underline">imgbb.com</a>,{" "}
-        <a href="https://postimages.org" target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:underline">postimages.org</a>,{" "}
-        <a href="https://catbox.moe" target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:underline">catbox.moe</a> o{" "}
-        <a href="https://imgur.com/upload" target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:underline">imgur.com</a> — sube y pega aquí la <em>URL directa</em> (.jpg/.png).
+        💡 Banco: elige una imagen gratis o sube la tuya — se convierte a <strong>.webp</strong> y se guarda en tu invitación (Firebase Storage, máx 5MB, se ve donde dejaste el módulo).
       </p>
+      {showBank && <ImageBank onSelect={(url) => { onChange(url); setPreview(url); }} onClose={() => setShowBank(false)} />}
     </div>
   );
 }
