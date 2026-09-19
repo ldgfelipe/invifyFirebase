@@ -27,8 +27,9 @@ export function SiteHeader() {
   return (
     <header className="sticky top-0 z-30 bg-cream/90 backdrop-blur border-b border-ink/10">
       <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-        <Link href="/" className="font-serif text-2xl text-ink">
-          Invify
+        <Link href="/" className="flex items-center">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo-h.png" alt="Invify" className="h-8 w-auto object-contain" />
         </Link>
 
         <nav className="hidden sm:flex items-center gap-6 text-sm text-ink/70">

@@ -27,6 +27,8 @@ export function Preloader({ imageUrl, text }: { imageUrl?: string; text?: string
       onClick={() => setHidden(true)}
       className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-ink cursor-pointer"
     >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/logo-invify.png" alt="Invify" className="h-12 w-auto object-contain mb-6 brightness-0 invert" />
       {imageUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={imageUrl} alt="" className="w-32 h-32 rounded-full object-cover mb-6 animate-pulse" />

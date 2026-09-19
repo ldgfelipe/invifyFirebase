@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { LanguageProvider } from "@/lib/i18n/provider";
 import { SiteHeader } from "@/components/layout/SiteHeader";
+import { SiteFooter } from "@/components/layout/SiteFooter";
 import { SITE_URL } from "@/lib/seo";
 
 // Fuentes premium (se autohospedan en build para Core Web Vitals).
@@ -61,11 +62,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es" className={`${playfair.variable} ${inter.variable}`}>
-      <body>
+      <body className="min-h-screen flex flex-col">
         <AuthProvider>
           <LanguageProvider>
             <SiteHeader />
-            {children}
+            <main className="flex-1">{children}</main>
+            <SiteFooter />
           </LanguageProvider>
         </AuthProvider>
       </body>

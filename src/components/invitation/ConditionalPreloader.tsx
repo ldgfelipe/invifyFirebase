@@ -63,6 +63,9 @@ export function ConditionalPreloader({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
       <div className="max-w-md w-full mx-4 text-center p-8">
+        {/* Logo Invify */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo-invify.png" alt="Invify" className="mx-auto mb-4 h-10 w-auto object-contain" />
         {/* Preloader visual existente */}
         {preloaderConfig?.imageUrl && (
           <img

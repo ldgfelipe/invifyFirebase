@@ -58,6 +58,7 @@ export default function AdminLayout({
           <AdminLink href="/admin/plans" label="Planes" />
           <AdminLink href="/admin/users" label="Usuarios" />
           <AdminLink href="/admin/sales" label="Ventas / Compras" />
+          <AdminLink href="/admin/contacts" label="Contactos" />
           <AdminLink href="/admin/settings" label="Sitio / Landing" />
         </nav>
         <Link href="/" className="text-ink/50 text-sm mt-10 inline-block hover:text-gold-500">

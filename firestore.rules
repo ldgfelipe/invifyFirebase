@@ -121,5 +121,18 @@ service cloud.firestore {
       allow create: if isSignedIn();
       allow update, delete: if isAdmin();
     }
+
+    // ---- /pages : CMS de páginas/landings ----
+    match /pages/{pageId} {
+      allow read: if resource.data.status == 'published' || isAdmin();
+      allow write: if isAdmin();
+    }
+
+    // ---- /contacts : mensajes de contacto ----
+    match /contacts/{contactId} {
+      allow read: if isAdmin();
+      allow create: if true;
+      allow update, delete: if isAdmin();
+    }
   }
 }
