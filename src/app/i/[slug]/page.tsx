@@ -19,7 +19,7 @@ export async function generateMetadata({
   params: { slug: string };
 }): Promise<Metadata> {
   const inv = await getPublishedInvitationBySlug(params.slug);
-  if (!inv) return { title: "Invitación no encontrada" };
+  if (!inv) return { title: "Invitación no encontrada", robots: { index: false, follow: false } };
 
   const url = invitationUrl(inv.slug);
   const image = inv.meta?.imageUrl ?? findImage(inv);
@@ -30,6 +30,8 @@ export async function generateMetadata({
   return {
     title: inv.title,
     description,
+    // Invitaciones son privadas: no indexar (particulares de clientes)
+    robots: { index: false, follow: false, noarchive: true, nosnippet: true, noimageindex: true },
     openGraph: {
       title: inv.title,
       description,

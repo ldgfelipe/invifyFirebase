@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
+import { LanguageProvider } from "@/lib/i18n/provider";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SITE_URL } from "@/lib/seo";
 
@@ -33,6 +34,8 @@ export const metadata: Metadata = {
     type: "website",
     url: SITE_URL,
     siteName: "Invify",
+    locale: "es_MX",
+    alternateLocale: ["en_US"],
   },
   twitter: { card: "summary_large_image" },
   robots: { index: true, follow: true },
@@ -40,6 +43,14 @@ export const metadata: Metadata = {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",
     apple: "/favicon.svg",
+  },
+  alternates: {
+    canonical: SITE_URL,
+    languages: {
+      es: SITE_URL,
+      en: `${SITE_URL}/en`,
+      "x-default": SITE_URL,
+    },
   },
 };
 
@@ -52,8 +63,10 @@ export default function RootLayout({
     <html lang="es" className={`${playfair.variable} ${inter.variable}`}>
       <body>
         <AuthProvider>
-          <SiteHeader />
-          {children}
+          <LanguageProvider>
+            <SiteHeader />
+            {children}
+          </LanguageProvider>
         </AuthProvider>
       </body>
     </html>
