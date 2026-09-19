@@ -15,6 +15,7 @@ import { Itinerary } from "./Itinerary";
 import { GiftTable } from "./GiftTable";
 import { Quiz } from "./Quiz";
 import { RsvpForm } from "./Rsvp";
+import { TextBlock } from "./TextBlock";
 
 function renderModule(
   module: InvitationModule,
@@ -52,6 +53,8 @@ function renderModule(
       return <Quiz module={module} invitationId={invitationId} demo={demo} />;
     case "rsvp":
       return <RsvpForm module={module} invitationId={invitationId} demo={demo} />;
+    case "text":
+      return <TextBlock module={module as any} />;
     default:
       return null;
   }

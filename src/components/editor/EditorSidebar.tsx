@@ -17,6 +17,7 @@ interface EditorSidebarProps {
 
 const MODULE_TYPES: { type: InvitationModule["type"]; label: string; icon: string }[] = [
   { type: "header", label: "Cabecera", icon: "🎯" },
+  { type: "text", label: "Texto libre", icon: "📝" },
   { type: "preloader", label: "Precargador", icon: "⏳" },
   { type: "countdown", label: "Cuenta regresiva", icon: "⏰" },
   { type: "audio", label: "Audio", icon: "🔊" },
@@ -141,6 +142,7 @@ export function EditorSidebar({
 function getIcon(type: string): string {
   const icons: Record<string, string> = {
     header: "🎯",
+    text: "📝",
     preloader: "⏳",
     countdown: "⏰",
     audio: "🔊",
@@ -158,6 +160,7 @@ function getIcon(type: string): string {
 function getLabel(type: string): string {
   const labels: Record<string, string> = {
     header: "Cabecera",
+    text: "Texto libre",
     preloader: "Precargador",
     countdown: "Cuenta regresiva",
     audio: "Audio",
@@ -177,6 +180,8 @@ function getModuleSummary(m: InvitationModule): string {
   switch (m.type) {
     case "header":
       return (m as any).title ?? "Sin título";
+    case "text":
+      return ((m as any).title ?? (m as any).content ?? "").slice(0, 24) || "Texto";
     case "countdown":
       return (m as any).targetDate ?? "Sin fecha";
     case "carousel":

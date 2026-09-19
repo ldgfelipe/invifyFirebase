@@ -233,6 +233,8 @@ function createDefaultModule(type: InvitationModule["type"]): InvitationModule {
       return { ...base, title: "Quiz", questions: [] } as any;
     case "rsvp":
       return { ...base, title: "Confirmar asistencia", collectEmail: true } as any;
+    case "text":
+      return { ...base, title: "Mensaje", content: "<p>Escribe tu mensaje aquí. Puedes usar <strong>negrita</strong>, <em>cursiva</em> y listas.</p>", align: "center" } as any;
     default:
       return base as any;
   }
@@ -242,6 +244,7 @@ function getModuleLabel(type: string): string {
   const labels: Record<string, string> = {
     preloader: "Precargador",
     header: "Cabecera",
+    text: "Texto libre",
     countdown: "Cuenta regresiva",
     audio: "Audio",
     carousel: "Carrusel",

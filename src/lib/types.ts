@@ -183,7 +183,8 @@ export type ModuleType =
   | "itinerary"
   | "giftTable"
   | "quiz"
-  | "rsvp";
+  | "rsvp"
+  | "text";
 
 export interface ModuleStyle {
   background?: string; // color sólido o gradiente (ej. "#FFFBF2" o "linear-gradient(...)")
@@ -292,6 +293,13 @@ export interface RsvpModule extends BaseModule {
   collectEmail: boolean;
 }
 
+export interface TextModule extends BaseModule {
+  type: "text";
+  title?: string; // título opcional
+  content: string; // HTML/rich text del mensaje (preserva formato)
+  align?: "left" | "center" | "right" | "justify";
+}
+
 export type InvitationModule =
   | PreloaderModule
   | HeaderModule
@@ -303,7 +311,8 @@ export type InvitationModule =
   | ItineraryModule
   | GiftTableModule
   | QuizModule
-  | RsvpModule;
+  | RsvpModule
+  | TextModule;
 
 export interface BuilderConfig {
   // Orden de render. Los módulos con visible=false se omiten.

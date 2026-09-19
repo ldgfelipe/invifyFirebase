@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { cn } from "@/lib/cn";
 import type { InvitationModule, BuilderConfig, ModuleStyle } from "@/lib/types";
 
@@ -208,6 +208,32 @@ function renderModuleFields(module: InvitationModule, onUpdate: (updates: Partia
             />
             Pedir email
           </label>
+        </>
+      );
+    case "text":
+      return (
+        <>
+          <Field label="Título (opcional)" value={m.title ?? ""} onChange={(v) => onUpdate({ title: v })} placeholder="Ej. Mensaje de los novios" />
+          <TextRichEditor
+            value={m.content ?? ""}
+            onChange={(v) => onUpdate({ content: v })}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm text-ink/70">Alineación</label>
+              <select
+                value={m.align ?? "center"}
+                onChange={(e) => onUpdate({ align: e.target.value as any })}
+                className="input mt-1"
+              >
+                <option value="left">Izquierda</option>
+                <option value="center">Centrado</option>
+                <option value="right">Derecha</option>
+                <option value="justify">Justificado</option>
+              </select>
+            </div>
+          </div>
+          <p className="text-xs text-ink/40">Se guarda donde lo dejes (arrastra el módulo en la barra izquierda para reordenar). Usa la barra de formato para negrita, cursiva, lista.</p>
         </>
       );
     default:
@@ -425,6 +451,66 @@ function GiftTableEditor({
           + Añadir regalo
         </button>
       </div>
+    </div>
+  );
+}
+
+function TextRichEditor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (editorRef.current && editorRef.current.innerHTML !== value) {
+      editorRef.current.innerHTML = value || "";
+    }
+  }, [value]);
+  function exec(cmd: string, val?: string) {
+    document.execCommand(cmd, false, val);
+    if (editorRef.current) onChange(editorRef.current.innerHTML);
+  }
+  return (
+    <div className="space-y-2">
+      <label className="text-sm text-ink/70">Mensaje / Texto libre</label>
+      <div className="flex flex-wrap gap-1 p-1.5 bg-ink/5 rounded-lg border border-ink/10">
+        <button type="button" onClick={() => exec("bold")} className="px-2 py-1 text-sm font-bold bg-white border border-ink/10 rounded hover:bg-ink/5" title="Negrita">
+          B
+        </button>
+        <button type="button" onClick={() => exec("italic")} className="px-2 py-1 text-sm italic bg-white border border-ink/10 rounded hover:bg-ink/5" title="Cursiva">
+          I
+        </button>
+        <button type="button" onClick={() => exec("underline")} className="px-2 py-1 text-sm underline bg-white border border-ink/10 rounded hover:bg-ink/5" title="Subrayado">
+          U
+        </button>
+        <button type="button" onClick={() => exec("insertUnorderedList")} className="px-2 py-1 text-sm bg-white border border-ink/10 rounded hover:bg-ink/5" title="Lista">
+          •
+        </button>
+        <button type="button" onClick={() => exec("insertOrderedList")} className="px-2 py-1 text-sm bg-white border border-ink/10 rounded hover:bg-ink/5" title="Numerada">
+          1.
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const url = prompt("URL del enlace:");
+            if (url) exec("createLink", url);
+          }}
+          className="px-2 py-1 text-sm bg-white border border-ink/10 rounded hover:bg-ink/5"
+          title="Enlace"
+        >
+          🔗
+        </button>
+        <button type="button" onClick={() => exec("removeFormat")} className="px-2 py-1 text-xs bg-white border border-ink/10 rounded hover:bg-ink/5">
+          Limpiar
+        </button>
+      </div>
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={(e) => onChange((e.target as HTMLDivElement).innerHTML)}
+        onBlur={(e) => onChange((e.target as HTMLDivElement).innerHTML)}
+        className="input min-h-[140px] bg-white"
+        style={{ minHeight: "140px", overflow: "auto" }}
+        data-placeholder="Escribe tu mensaje aquí... Usa la barra para dar formato."
+      />
+      <p className="text-[11px] text-ink/40">Se guarda exactamente donde dejaste el módulo (arrástralo en el sidebar para reordenar). Puedes pegar texto con formato.</p>
     </div>
   );
 }
