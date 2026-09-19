@@ -10,10 +10,14 @@ export default function AdminSiteSettings() {
   const { user } = useAuth();
   const [form, setForm] = useState<SiteSettings>({
     heroTitle: "",
+    heroTitle_en: "",
     heroSubtitle: "",
+    heroSubtitle_en: "",
     heroCta: "",
+    heroCta_en: "",
     heroImage: "",
     metaDescription: "",
+    metaDescription_en: "",
     stripeTestMode: true,
   });
   const [msg, setMsg] = useState<string | null>(null);
@@ -115,18 +119,19 @@ export default function AdminSiteSettings() {
         {activeTab === "general" && (
           <>
             <section>
-              <h2 className="font-serif text-lg text-ink mb-4 border-b border-ink/10 pb-2">Landing principal</h2>
+              <h2 className="font-serif text-lg text-ink mb-4 border-b border-ink/10 pb-2">Landing principal (ES)</h2>
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm text-ink/70 block mb-1">Título del hero</label>
+                  <label className="text-sm text-ink/70 block mb-1">Título del hero (ES)</label>
                   <input
                     className="input"
                     value={form.heroTitle}
                     onChange={(e) => setForm({ ...form, heroTitle: e.target.value })}
+                    placeholder="Invitaciones que se sienten como el evento"
                   />
                 </div>
                 <div>
-                  <label className="text-sm text-ink/70 block mb-1">Subtítulo</label>
+                  <label className="text-sm text-ink/70 block mb-1">Subtítulo (ES)</label>
                   <textarea
                     className="input"
                     value={form.heroSubtitle}
@@ -134,7 +139,7 @@ export default function AdminSiteSettings() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm text-ink/70 block mb-1">Texto del botón (CTA)</label>
+                  <label className="text-sm text-ink/70 block mb-1">Texto del botón (CTA) (ES)</label>
                   <input
                     className="input"
                     value={form.heroCta}
@@ -142,19 +147,66 @@ export default function AdminSiteSettings() {
                   />
                 </div>
                 <div>
-                  <label className="text-sm text-ink/70 block mb-1">Imagen del hero (URL)</label>
-                  <input
-                    className="input"
-                    value={form.heroImage ?? ""}
-                    onChange={(e) => setForm({ ...form, heroImage: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm text-ink/70 block mb-1">Meta descripción (SEO)</label>
+                  <label className="text-sm text-ink/70 block mb-1">Meta descripción (SEO) (ES)</label>
                   <textarea
                     className="input"
                     value={form.metaDescription}
                     onChange={(e) => setForm({ ...form, metaDescription: e.target.value })}
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section className="bg-blue-50/50 border border-blue-100 rounded-lg p-4">
+              <h2 className="font-serif text-lg text-ink mb-4 border-b border-blue-100 pb-2">Landing principal (EN) 🇺🇸</h2>
+              <p className="text-xs text-ink/50 mb-3">Se muestra cuando el usuario elige English con el switch ES/EN. Si lo dejas vacío, se usa la versión en español.</p>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm text-ink/70 block mb-1">Hero Title (EN)</label>
+                  <input
+                    className="input"
+                    value={form.heroTitle_en ?? ""}
+                    onChange={(e) => setForm({ ...form, heroTitle_en: e.target.value })}
+                    placeholder="Invitations that feel like the event"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-ink/70 block mb-1">Hero Subtitle (EN)</label>
+                  <textarea
+                    className="input"
+                    value={form.heroSubtitle_en ?? ""}
+                    onChange={(e) => setForm({ ...form, heroSubtitle_en: e.target.value })}
+                    placeholder="Editorial design, intentional typography..."
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-ink/70 block mb-1">CTA Button (EN)</label>
+                  <input
+                    className="input"
+                    value={form.heroCta_en ?? ""}
+                    onChange={(e) => setForm({ ...form, heroCta_en: e.target.value })}
+                    placeholder="Browse catalog"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-ink/70 block mb-1">Meta Description (EN)</label>
+                  <textarea
+                    className="input"
+                    value={form.metaDescription_en ?? ""}
+                    onChange={(e) => setForm({ ...form, metaDescription_en: e.target.value })}
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm text-ink/70 block mb-1">Imagen del hero (URL) - compartida ES/EN</label>
+                  <input
+                    className="input"
+                    value={form.heroImage ?? ""}
+                    onChange={(e) => setForm({ ...form, heroImage: e.target.value })}
                   />
                 </div>
               </div>

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getActiveTemplates, CATEGORIES } from "@/lib/catalog";
 import { getSiteSettings } from "@/lib/site";
 import { TemplateCard } from "@/components/catalog/TemplateCard";
+import { Hero } from "@/components/Hero";
 
 export const revalidate = 300;
 
@@ -15,26 +16,7 @@ export default async function HomePage() {
 
   return (
     <div>
-      {/* HERO */}
-      <section className="relative min-h-[70vh] flex flex-col items-center justify-center text-center px-6 bg-champagne">
-        <p className="uppercase tracking-[0.3em] text-gold-500 text-sm mb-4">
-          ✨ Invify - Invitaciones digitales
-        </p>
-        <h1 className="font-serif text-5xl md:text-7xl text-ink max-w-3xl">
-          {settings.heroTitle}
-        </h1>
-        <p className="mt-4 text-ink/70 max-w-xl">
-          {settings.heroSubtitle}
-        </p>
-        <div className="mt-8 flex gap-4">
-          <Link href="/templates" className="btn-primary">
-            {settings.heroCta || "Ver catálogo"}
-          </Link>
-          <Link href="/pricing" className="btn-outline">
-            Ver planes
-          </Link>
-        </div>
-      </section>
+      <Hero settings={settings} />
 
       {/* CATEGORÍAS */}
       <section className="py-14 px-6 max-w-5xl mx-auto">

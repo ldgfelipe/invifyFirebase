@@ -341,10 +341,14 @@ export interface SeoMeta {
 // SEO de la landing principal, y claves de pagos.
 export interface SiteSettings {
   heroTitle: string;
+  heroTitle_en?: string;
   heroSubtitle: string;
+  heroSubtitle_en?: string;
   heroCta: string;
+  heroCta_en?: string;
   heroImage?: string;
   metaDescription: string;
+  metaDescription_en?: string;
 
   // Stripe - Test
   stripeTestPublishableKey?: string;

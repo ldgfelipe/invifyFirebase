@@ -49,9 +49,13 @@ export const PLANS = [
 export function siteConfig() {
   return {
     heroTitle: "Invitaciones que se sienten como el evento",
+    heroTitle_en: "Invitations that feel like the event",
     heroSubtitle: "Diseño editorial, tipografía con intención y experiencia móvil impecable. Elige, personaliza y comparte en 3 clics.",
+    heroSubtitle_en: "Editorial design, intentional typography and flawless mobile experience. Choose, customize and share in 3 clicks.",
     heroCta: "Explorar catálogo profesional",
+    heroCta_en: "Browse professional catalog",
     metaDescription: "Invify - 30 plantillas profesionales para bodas, cumpleaños, baby shower, bautizos y corporativo. Diseño editorial con RSVP, quiz y música.",
+    metaDescription_en: "Invify - 30 professional templates for weddings, birthdays, baby showers, baptisms and corporate. Editorial design with RSVP, quiz and music.",
     updatedAt: Date.now(),
   };
 }
