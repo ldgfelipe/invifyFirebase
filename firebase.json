@@ -7,6 +7,7 @@
     "rules": "storage.rules"
   },
   "hosting": {
+    "site": "invify-online",
     "source": ".",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "**/.next/**", "**/.git/**", "**/service-account.json", "**/.secrets/**"],
     "frameworksBackend": {
