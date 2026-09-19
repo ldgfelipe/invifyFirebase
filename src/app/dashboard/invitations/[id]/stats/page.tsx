@@ -18,6 +18,9 @@ import {
   deleteDoc,
   writeBatch,
   updateDoc,
+  onSnapshot,
+  query,
+  orderBy,
 } from "firebase/firestore";
 import type { Invitation, Rsvp, QuizResponse } from "@/lib/types";
 import { getInvitationFeatures } from "@/lib/plans";
@@ -32,22 +35,44 @@ export default function StatsPage() {
   const [quizzes, setQuizzes] = useState<QuizResponse[]>([]);
   const [resetting, setResetting] = useState(false);
 
-  async function load() {
-    if (!user || !id) return;
-    const snap = await getDoc(doc(db, "invitations", id));
-    if (!snap.exists()) return;
-    setInv(snap.data() as Invitation);
-
-    const rSnap = await getDocs(collection(db, "invitations", id, "rsvps"));
-    setRsvps(rSnap.docs.map((d) => d.data() as Rsvp));
-
-    const qSnap = await getDocs(collection(db, "invitations", id, "quizResponses"));
-    setQuizzes(qSnap.docs.map((d) => d.data() as QuizResponse));
-  }
-
+  // Realtime: suscripción en vivo a invitación + rsvps + quiz (websocket Firestore)
   useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (!user || !id) return;
+    const unsubs: Array<() => void> = [];
+
+    // Invitación (views, título, etc) en vivo
+    const invRef = doc(db, "invitations", id as string);
+    unsubs.push(
+      onSnapshot(
+        invRef,
+        (snap) => {
+          if (snap.exists()) setInv(snap.data() as Invitation);
+        },
+        (err) => console.warn("[stats] onSnapshot inv error", err)
+      )
+    );
+
+    // RSVPs en vivo
+    const rsvpsQ = collection(db, "invitations", id as string, "rsvps");
+    unsubs.push(
+      onSnapshot(
+        rsvpsQ,
+        (snap) => setRsvps(snap.docs.map((d) => d.data() as Rsvp)),
+        (err) => console.warn("[stats] onSnapshot rsvps error", err)
+      )
+    );
+
+    // Quiz en vivo
+    const quizQ = collection(db, "invitations", id as string, "quizResponses");
+    unsubs.push(
+      onSnapshot(
+        quizQ,
+        (snap) => setQuizzes(snap.docs.map((d) => d.data() as QuizResponse)),
+        (err) => console.warn("[stats] onSnapshot quiz error", err)
+      )
+    );
+
+    return () => unsubs.forEach((u) => u());
   }, [user, id]);
 
   async function resetData() {
@@ -63,7 +88,7 @@ export default function StatsPage() {
       "stats.views": 0,
       "stats.uniqueViews": 0,
     });
-    await load();
+    // onSnapshot actualizará automáticamente rsvps/quiz a vacío y views a 0
     setResetting(false);
   }
 
@@ -103,7 +128,12 @@ export default function StatsPage() {
         ← Volver
       </Link>
       <div className="flex flex-wrap items-center justify-between mt-4 mb-6 gap-3">
-        <h1 className="section-title">{inv.title} · Estadísticas</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="section-title">{inv.title} · Estadísticas</h1>
+          <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-green-50 border border-green-200 text-green-700">
+            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" /> En vivo
+          </span>
+        </div>
         <div className="flex flex-wrap gap-2 items-center">
           <ShareMenu slug={inv.slug} title={inv.title} variant="inline" />
           <button onClick={() => window.print()} className="btn-outline text-sm px-3 py-2">

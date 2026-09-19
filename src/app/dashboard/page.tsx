@@ -13,6 +13,7 @@ import {
   getDoc,
   doc,
   deleteDoc,
+  onSnapshot,
 } from "firebase/firestore";
 import type { Invitation, Order, Template, UserEntitlements } from "@/lib/types";
 import { isInvitationActive } from "@/lib/invitationValidity";
@@ -33,44 +34,48 @@ export default function MyInvitationsPage() {
 
   useEffect(() => {
     if (!user) return;
+    // Entitlements y plantillas (one-shot, no necesitan realtime)
     (async () => {
       try {
-        // Invitaciones
-        const invQ = query(
-          collection(db, "invitations"),
-          where("ownerUid", "==", user.uid),
-          orderBy("createdAt", "desc")
-        );
-        const invSnap = await getDocs(invQ);
-        setInvitations(invSnap.docs.map((d) => d.data() as Invitation));
-
-        // Orders pendientes
-        const ordQ = query(
-          collection(db, "orders"),
-          where("uid", "==", user.uid),
-          where("status", "==", "pending"),
-          orderBy("createdAt", "desc")
-        );
-        const ordSnap = await getDocs(ordQ);
-        setPendingOrders(ordSnap.docs.map((d) => d.data() as Order));
-
-        // Entitlements de la cuenta
         const userSnap = await getDoc(doc(db, "users", user.uid));
-        setEntitlements(
-          (userSnap.data()?.entitlements as UserEntitlements | undefined) ?? null
-        );
-
-        // Plantillas activas (para crear con cupo)
-        const tplSnap = await getDocs(
-          query(collection(db, "templates"), where("active", "==", true))
-        );
+        setEntitlements((userSnap.data()?.entitlements as UserEntitlements | undefined) ?? null);
+        const tplSnap = await getDocs(query(collection(db, "templates"), where("active", "==", true)));
         setTemplates(tplSnap.docs.map((d) => d.data() as Template));
       } catch (err) {
         console.error(err);
-      } finally {
-        setLoading(false);
       }
     })();
+  }, [user]);
+
+  // Realtime: invitaciones y órdenes pendientes (websocket Firestore)
+  useEffect(() => {
+    if (!user) return;
+    const unsubs: Array<() => void> = [];
+    // Invitaciones en vivo
+    const invQ = query(collection(db, "invitations"), where("ownerUid", "==", user.uid), orderBy("createdAt", "desc"));
+    unsubs.push(
+      onSnapshot(
+        invQ,
+        (snap) => {
+          setInvitations(snap.docs.map((d) => d.data() as Invitation));
+          setLoading(false);
+        },
+        (err) => {
+          console.warn("[dashboard] onSnapshot invitations error", err);
+          setLoading(false);
+        }
+      )
+    );
+    // Órdenes pendientes en vivo
+    const ordQ = query(collection(db, "orders"), where("uid", "==", user.uid), where("status", "==", "pending"), orderBy("createdAt", "desc"));
+    unsubs.push(
+      onSnapshot(
+        ordQ,
+        (snap) => setPendingOrders(snap.docs.map((d) => d.data() as Order)),
+        (err) => console.warn("[dashboard] onSnapshot orders error", err)
+      )
+    );
+    return () => unsubs.forEach((u) => u());
   }, [user]);
 
   async function patchInvitation(inv: Invitation, payload: Record<string, unknown>) {
@@ -122,14 +127,8 @@ export default function MyInvitationsPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "No se pudo crear");
-      const invQ = query(
-        collection(db, "invitations"),
-        where("ownerUid", "==", user.uid),
-        orderBy("createdAt", "desc")
-      );
-      const invSnap = await getDocs(invQ);
-      setInvitations(invSnap.docs.map((d) => d.data() as Invitation));
-      alert("¡Invitación creada! Ya aparece en tu lista.");
+      // onSnapshot actualizará la lista automáticamente (realtime)
+      alert("¡Invitación creada! Aparecerá en tu lista en segundos.");
     } catch (err: any) {
       alert("Error: " + err.message);
     } finally {
@@ -153,23 +152,7 @@ export default function MyInvitationsPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Error procesando");
-      // Recarga
-      const ordQ = query(
-        collection(db, "orders"),
-        where("uid", "==", user!.uid),
-        where("status", "==", "pending"),
-        orderBy("createdAt", "desc")
-      );
-      const ordSnap = await getDocs(ordQ);
-      setPendingOrders(ordSnap.docs.map((d) => d.data() as Order));
-      // Recarga invitaciones
-      const invQ = query(
-        collection(db, "invitations"),
-        where("ownerUid", "==", user!.uid),
-        orderBy("createdAt", "desc")
-      );
-      const invSnap = await getDocs(invQ);
-      setInvitations(invSnap.docs.map((d) => d.data() as Invitation));
+      // onSnapshot actualizará invitaciones/órdenes automáticamente
       
       // Log cliente
       await fetch("/api/logs", {
@@ -242,7 +225,12 @@ export default function MyInvitationsPage() {
   return (
     <div>
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-        <h1 className="section-title">Mis invitaciones</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="section-title">Mis invitaciones</h1>
+          <span className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-green-50 border border-green-200 text-green-700">
+            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" /> En vivo
+          </span>
+        </div>
         <Link href="/templates" className="btn-primary w-full sm:w-auto">
           Comprar otra invitación
         </Link>
