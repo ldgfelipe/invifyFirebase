@@ -59,6 +59,10 @@ export default function AdminTemplates() {
   const [configText, setConfigText] = useState(SAMPLE_CONFIG);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [filterCat, setFilterCat] = useState<TemplateCategory | "all">("all");
+  const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive">("all");
+  const [sortBy, setSortBy] = useState<"recent" | "name" | "category">("recent");
 
   async function load() {
     const snap = await getDocs(query(collection(db, "templates"), orderBy("createdAt", "desc")));
@@ -129,36 +133,123 @@ export default function AdminTemplates() {
     await load();
   }
 
+  // --- Filtros y búsqueda ---
+  const counts = CATEGORIES.reduce((acc, c) => {
+    acc[c] = items.filter((t) => t.category === c).length;
+    return acc;
+  }, {} as Record<string, number>);
+  const filtered = items
+    .filter((t) => {
+      if (filterCat !== "all" && t.category !== filterCat) return false;
+      if (filterStatus === "active" && !t.active) return false;
+      if (filterStatus === "inactive" && t.active) return false;
+      if (search && !t.name.toLowerCase().includes(search.toLowerCase()) && !t.id.toLowerCase().includes(search.toLowerCase())) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "name") return a.name.localeCompare(b.name);
+      if (sortBy === "category") return a.category.localeCompare(b.category);
+      return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+    });
+
+  function catColor(cat: string) {
+    const map: Record<string, string> = { boda: "bg-pink-100 text-pink-700", cumpleanos: "bg-amber-100 text-amber-700", babyshower: "bg-sky-100 text-sky-700", bautizo: "bg-violet-100 text-violet-700", corporativo: "bg-slate-100 text-slate-700" };
+    return map[cat] ?? "bg-ink/10 text-ink/60";
+  }
+  function catLabel(cat: string) {
+    return cat.charAt(0).toUpperCase() + cat.slice(1);
+  }
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="section-title">Plantillas</h1>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+        <div>
+          <h1 className="section-title">Plantillas</h1>
+          <p className="text-sm text-ink/50">{items.length} totales · {filtered.length} filtradas · {CATEGORIES.map((c) => `${catLabel(c)}:${counts[c] ?? 0}`).join(" · ")}</p>
+        </div>
         <button onClick={startNew} className="btn-primary">
           Nueva plantilla
         </button>
       </div>
 
+      {/* Barra búsqueda y filtros */}
+      <div className="card p-4 mb-6 space-y-3">
+        <div className="flex flex-col lg:flex-row gap-3">
+          <div className="flex-1 relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink/30">🔍</span>
+            <input className="input pl-9" placeholder="Buscar por nombre o id..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          <select className="input lg:w-48" value={filterCat} onChange={(e) => setFilterCat(e.target.value as any)}>
+            <option value="all">Todas las categorías</option>
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {catLabel(c)} ({counts[c] ?? 0})
+              </option>
+            ))}
+          </select>
+          <select className="input lg:w-40" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as any)}>
+            <option value="all">Todas</option>
+            <option value="active">Solo activas</option>
+            <option value="inactive">Inactivas</option>
+          </select>
+          <select className="input lg:w-36" value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
+            <option value="recent">Recientes</option>
+            <option value="name">Nombre A-Z</option>
+            <option value="category">Categoría</option>
+          </select>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => setFilterCat("all")} className={`text-xs px-3 py-1 rounded-full border ${filterCat === "all" ? "bg-ink text-white border-ink" : "bg-white border-ink/10"}`}>
+            Todas ({items.length})
+          </button>
+          {CATEGORIES.map((c) => (
+            <button key={c} onClick={() => setFilterCat(c)} className={`text-xs px-3 py-1 rounded-full border capitalize ${filterCat === c ? "bg-gold-500 text-white border-gold-500" : "bg-white border-ink/10"}`}>
+              {catLabel(c)} ({counts[c] ?? 0})
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Lista */}
-        <div className="space-y-3">
-          {items.map((t) => (
-            <div key={t.id} className="card p-4 flex items-center justify-between">
-              <div>
-                <p className="font-serif text-lg text-ink">{t.name}</p>
-                <p className="text-xs text-ink/50 capitalize">
-                  {t.category} · {t.active ? "Activa" : "Inactiva"}
+        <div className="space-y-3 max-h-[70vh] overflow-auto pr-1">
+          {filtered.map((t) => (
+            <div key={t.id} className={`card p-3 flex gap-3 hover:shadow-md transition ${editing?.id === t.id ? "ring-2 ring-gold-300" : ""}`}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={t.thumbnailUrl} alt={t.name} className="w-20 h-20 rounded-lg object-cover border border-ink/10 shrink-0" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-serif text-sm text-ink leading-tight truncate pr-2">{t.name}</p>
+                  <span className={`text-[10px] px-2 py-1 rounded-full ${t.active ? "bg-green-100 text-green-700" : "bg-ink/10 text-ink/50"}`}>{t.active ? "Activa" : "Inactiva"}</span>
+                </div>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full capitalize ${catColor(t.category)}`}>{t.category}</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-ink/5 text-ink/50">{t.builderConfig?.modules?.length ?? 0} secciones</span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-ink/5 text-ink/50" title={t.id}>
+                    {t.id.slice(0, 12)}…
+                  </span>
+                </div>
+                <p className="text-[11px] text-ink/40 mt-1 truncate">
+                  {(t.builderConfig?.modules ?? []).map((m: any) => m.type).join(" · ") || "Sin módulos"}
                 </p>
+                <p className="text-[11px] text-ink/40">{t.builderConfig?.theme?.fontFamily === "serif" ? "Serif elegante" : "Sans moderno"} · {t.builderConfig?.theme?.primaryColor}</p>
               </div>
-              <div className="flex gap-2">
-                <button onClick={() => startEdit(t)} className="btn-outline text-sm px-3 py-1">
+              <div className="flex flex-col gap-1 shrink-0">
+                <button onClick={() => startEdit(t)} className="btn-outline text-xs px-2 py-1">
                   Editar
                 </button>
-                <button onClick={() => remove(t)} className="btn-outline text-sm px-3 py-1 text-red-600">
+                <a href={`/templates/demo/${t.id}`} target="_blank" className="btn-outline text-xs px-2 py-1 text-center">
+                  Ver
+                </a>
+                <button onClick={() => remove(t)} className="btn-outline text-xs px-2 py-1 text-red-600">
                   Eliminar
                 </button>
               </div>
             </div>
           ))}
+          {filtered.length === 0 && (
+            <p className="text-ink/50 text-sm py-8 text-center">Sin resultados para los filtros. <button onClick={() => { setSearch(""); setFilterCat("all"); setFilterStatus("all"); }} className="text-gold-500 underline">Limpiar</button></p>
+          )}
           {items.length === 0 && (
             <p className="text-ink/50 text-sm">Aún no hay plantillas.</p>
           )}
