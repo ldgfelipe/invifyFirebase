@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/lib/i18n/provider";
 import type { Plan } from "@/lib/types";
 import { cn } from "@/lib/cn";
 import { loadStripe } from "@stripe/stripe-js";
@@ -90,6 +91,7 @@ export function PricingFlow({
   templateId?: string;
 }) {
   const { user, loading } = useAuth();
+  const { locale } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
@@ -303,9 +305,13 @@ export function PricingFlow({
                     Popular
                   </span>
                 )}
-                <h2 className="font-serif text-2xl text-ink">{plan.name}</h2>
+                <h2 className="font-serif text-2xl text-ink">
+              {locale === "en" && plan.name_en ? plan.name_en : plan.name}
+            </h2>
                 <p className="text-3xl font-serif text-gold-500 my-4">
-                  {formatPrice(plan.price, plan.currency as "mxn" | "usd" | "eur")}
+                  {locale === "en"
+                    ? formatPrice(plan.price_usd ?? plan.price, "usd")
+                    : formatPrice(plan.price, plan.currency as "mxn" | "usd" | "eur")}
                   {plan.interval && plan.interval !== "one_time" && (
                     <span className="text-sm text-ink/60 ml-1">
                       /{plan.interval === "month" ? "mes" : plan.interval}
@@ -337,7 +343,10 @@ export function PricingFlow({
             Plan seleccionado:{" "}
             <strong className="text-ink">{selectedPlan?.name}</strong>
             {selectedPlan && (
-              <> · {formatPrice(selectedPlan.price, selectedPlan.currency as "mxn" | "usd" | "eur")}</>
+              <>
+                · {locale === "en"
+                  ? formatPrice(selectedPlan.price_usd ?? selectedPlan.price, "usd")
+                  : formatPrice(selectedPlan.price, selectedPlan.currency as "mxn" | "usd" | "eur")}</>
             )}
           </p>
 
@@ -379,7 +388,9 @@ export function PricingFlow({
               {busyPlan
                 ? "Preparando…"
                 : selectedPlan
-                  ? `Pagar ${formatPrice(selectedPlan.price, selectedPlan.currency as "mxn" | "usd" | "eur")}`
+                  ? `Pagar ${locale === "en"
+                    ? formatPrice(selectedPlan.price_usd ?? selectedPlan.price, "usd")
+                    : formatPrice(selectedPlan.price, selectedPlan.currency as "mxn" | "usd" | "eur")}`
                   : "Pagar"}
             </button>
             <button

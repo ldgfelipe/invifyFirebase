@@ -16,14 +16,24 @@ type Contact = {
 };
 
 export default function AdminContactsPage() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [items, setItems] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "new" | "read">("all");
 
   async function load() {
-    const snap = await getDocs(query(collection(db, "contacts"), orderBy("createdAt", "desc")));
-    setItems(snap.docs.map((d) => d.data() as Contact));
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    try {
+      const colRef = collection(db, "contacts");
+      const q = query(colRef, orderBy("createdAt", "desc"));
+      const snap = await getDocs(q);
+      setItems(snap.docs.map((d) => d.data() as Contact));
+    } catch (e) {
+      console.error("[contacts] error loading", e);
+    }
     setLoading(false);
   }
 
@@ -32,14 +42,22 @@ export default function AdminContactsPage() {
   }, [user]);
 
   async function mark(id: string, status: Contact["status"]) {
-    await updateDoc(doc(db, "contacts", id), { status });
-    setItems((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
+    try {
+      await updateDoc(doc(db, "contacts", id), { status });
+      setItems((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
+    } catch (e) {
+      console.error("[contacts] error marking", e);
+    }
   }
 
   async function remove(id: string) {
     if (!confirm("¿Eliminar mensaje?")) return;
-    await deleteDoc(doc(db, "contacts", id));
-    setItems((prev) => prev.filter((c) => c.id !== id));
+    try {
+      await deleteDoc(doc(db, "contacts", id));
+      setItems((prev) => prev.filter((c) => c.id !== id));
+    } catch (e) {
+      console.error("[contacts] error removing", e);
+    }
   }
 
   const filtered = items.filter((c) => (filter === "all" ? true : c.status === filter));
@@ -50,7 +68,10 @@ export default function AdminContactsPage() {
     <div className="max-w-5xl">
       <div className="flex items-center justify-between mb-6">
         <h1 className="section-title">Contactos</h1>
-        <span className="text-sm text-ink/60">{filtered.length} mensajes · {items.filter((c) => c.status === "new").length} nuevos</span>
+        <span className="text-sm text-ink/60">
+          {filtered.length} mensajes ·
+          {items.filter((c) => c.status === "new").length} nuevos
+        </span>
       </div>
 
       <div className="flex gap-2 mb-4">

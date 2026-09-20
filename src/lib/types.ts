@@ -135,6 +135,7 @@ export interface UserEntitlements extends PlanEntitlements {
 export interface Plan {
   id: string;
   name: string;
+  name_en?: string;
   price: number; // en centavos
   currency: string;
   features: string[];
@@ -147,6 +148,7 @@ export interface Plan {
   stripeProductId?: string; // legacy
   stripeProductIdTest?: string;
   stripeProductIdLive?: string;
+  price_usd?: number; // en centavos, para modo English
 }
 
 export interface Order {

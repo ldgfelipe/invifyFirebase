@@ -11,7 +11,9 @@ export const PLANS = [
   {
     id: "plan_basic",
     name: "Básico",
+    name_en: "Basic",
     price: 15000,
+    price_usd: 7500, // ~75 USD (aprox 15000 MXN / 20)
     currency: "mxn",
     interval: "one_time",
     features: ["1 invitación activa", "URL /i/slug propia", "Soporte de 1 tema"],
@@ -23,7 +25,9 @@ export const PLANS = [
   {
     id: "plan_pro",
     name: "Pro",
+    name_en: "Pro",
     price: 32000,
+    price_usd: 1600, // ~160 USD (aprox 32000 MXN / 20)
     currency: "mxn",
     interval: "one_time",
     features: ["5 invitaciones activas", "RSVP + Quiz + Música", "Estadísticas de vistas"],
@@ -35,7 +39,9 @@ export const PLANS = [
   {
     id: "plan_premium",
     name: "Premium",
+    name_en: "Premium",
     price: 49000,
+    price_usd: 2450, // ~245 USD (aprox 49000 MXN / 20)
     currency: "mxn",
     interval: "month",
     features: ["Invitaciones ilimitadas", "Todo el catálogo de temas", "Soporte prioritario"],
