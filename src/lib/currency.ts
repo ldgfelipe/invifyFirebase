@@ -2,19 +2,21 @@
 // FORMATO DE MONEDA - Configurable para MXN (default) u otras
 // ============================================================================
 
-export type Currency = "mxn" | "usd" | "eur";
+export type Currency = "mxn" | "usd" | "idr" | "eur";
 
 export const DEFAULT_CURRENCY: Currency = "mxn";
 
 export const CURRENCY_SYMBOLS: Record<Currency, string> = {
   mxn: "$",
   usd: "$",
+  idr: "Rp",
   eur: "€",
 };
 
 export const CURRENCY_LOCALES: Record<Currency, string> = {
   mxn: "es-MX",
   usd: "en-US",
+  idr: "id-ID",
   eur: "de-DE",
 };
 

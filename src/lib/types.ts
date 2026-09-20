@@ -136,7 +136,7 @@ export interface Plan {
   id: string;
   name: string;
   name_en?: string;
-  price: number; // en centavos
+  price: number; // en centavos (base, en MXN)
   currency: string;
   features: string[];
   // Entitlements del plan (si no existe, se usa el catálogo por defecto).
@@ -149,6 +149,7 @@ export interface Plan {
   stripeProductIdTest?: string;
   stripeProductIdLive?: string;
   price_usd?: number; // en centavos, para modo English
+  price_idr?: number; // en centavos, para modo IDR
 }
 
 export interface Order {

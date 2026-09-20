@@ -311,7 +311,9 @@ export function PricingFlow({
                 <p className="text-3xl font-serif text-gold-500 my-4">
                   {locale === "en"
                     ? formatPrice(plan.price_usd ?? plan.price, "usd")
-                    : formatPrice(plan.price, plan.currency as "mxn" | "usd" | "eur")}
+                    : plan.currency === "idr"
+                      ? formatPrice(plan.price_idr ?? plan.price, "idr")
+                      : formatPrice(plan.price, plan.currency as "mxn" | "usd" | "eur")}
                   {plan.interval && plan.interval !== "one_time" && (
                     <span className="text-sm text-ink/60 ml-1">
                       /{plan.interval === "month" ? "mes" : plan.interval}
@@ -346,7 +348,9 @@ export function PricingFlow({
               <>
                 · {locale === "en"
                   ? formatPrice(selectedPlan.price_usd ?? selectedPlan.price, "usd")
-                  : formatPrice(selectedPlan.price, selectedPlan.currency as "mxn" | "usd" | "eur")}</>
+                  : selectedPlan.currency === "idr"
+                    ? formatPrice(selectedPlan.price_idr ?? selectedPlan.price, "idr")
+                    : formatPrice(selectedPlan.price, selectedPlan.currency as "mxn" | "usd" | "eur")}</>
             )}
           </p>
 

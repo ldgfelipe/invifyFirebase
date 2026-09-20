@@ -1,13 +1,8 @@
 "use client";
 
-// ============================================================================
-// ADMIN / PLANES - CRUD de /plans + sincronización automática con Stripe.
-// "Guardar y sincronizar" crea/actualiza el Plan y los Product+Price de Stripe
-// (test y live si hay claves configuradas) en un solo clic, sin escribir
-// price_xxx a mano.
-// ============================================================================
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/lib/i18n/provider";
 import { db } from "@/lib/firebase/client";
 import {
   collection,
@@ -32,6 +27,7 @@ const INTERVALS: Array<"one_time" | "day" | "week" | "month" | "year"> = [
 
 export default function AdminPlans() {
   const { user } = useAuth();
+  const { locale } = useLanguage();
   const [items, setItems] = useState<Plan[]>([]);
   const [editing, setEditing] = useState<Plan | null>(null);
   const [form, setForm] = useState<Partial<Plan>>({});
@@ -53,7 +49,10 @@ export default function AdminPlans() {
     setEditing(null);
     setForm({
       name: "",
+      name_en: "",
       price: 0,
+      price_usd: 0,
+      price_idr: 0,
       currency: "mxn",
       interval: "one_time",
       features: [],
@@ -67,7 +66,7 @@ export default function AdminPlans() {
   }
   function startEdit(p: Plan) {
     setEditing(p);
-    setForm({ ...p });
+    setForm({ ...p, name_en: p.name_en ?? "", price_usd: p.price_usd ?? 0, price_idr: p.price_idr ?? 0 });
     setFeaturesText((p.features ?? []).join("\n"));
     setErr(null);
     setMsg(null);
@@ -95,7 +94,10 @@ export default function AdminPlans() {
     const data: Plan = {
       id,
       name: form.name!,
+      name_en: form.name_en ?? "",
       price: Number(form.price ?? 0),
+      price_usd: Number(form.price_usd ?? 0),
+      price_idr: Number(form.price_idr ?? 0),
       currency: form.currency ?? "mxn",
       interval: form.interval ?? "one_time",
       features: parseFeatures(),
@@ -127,7 +129,10 @@ export default function AdminPlans() {
       const data: Plan = {
         id,
         name: form.name!,
+        name_en: form.name_en ?? "",
         price: Number(form.price ?? 0),
+        price_usd: Number(form.price_usd ?? 0),
+        price_idr: Number(form.price_idr ?? 0),
         currency: form.currency ?? "mxn",
         interval: form.interval ?? "one_time",
         features: parseFeatures(),
@@ -138,7 +143,6 @@ export default function AdminPlans() {
         stripeProductIdTest: form.stripeProductIdTest ?? "",
         stripeProductIdLive: form.stripeProductIdLive ?? "",
       };
-      await setDoc(doc(db, "plans", id), data);
 
       // 2. Sincronizar con Stripe (test/live según claves configuradas).
       const res = await fetch("/api/admin/stripe-prices/sync", {
@@ -206,7 +210,7 @@ export default function AdminPlans() {
                   <div>
                     <p className="font-serif text-lg text-ink">{p.name}</p>
                     <p className="text-xs text-ink/50">
-                      {formatPrice(p.price, (p.currency as "mxn" | "usd" | "eur") || "mxn")} ·{" "}
+                      {locale === "en" && p.name_en ? p.name_en : p.name} ·{ formatPrice(p.price, (p.currency as "mxn" | "usd" | "eur") || "mxn") } ·{" "}
                       {p.interval === "one_time" || !p.interval
                         ? "pago único"
                         : p.interval === "year"
@@ -300,14 +304,12 @@ export default function AdminPlans() {
             Si eliges un intervalo recurrente (suscripción), usa «Guardar y sincronizar con Stripe» para crear el Price.
           </p>
 
-          <div>
-            <label className="text-sm text-ink/70">Features (una por línea)</label>
-            <textarea
-              className="input mt-1 h-32"
-              value={featuresText}
-              onChange={(e) => setFeaturesText(e.target.value)}
-            />
-          </div>
+          <p className="text-xs text-ink/70">Features (una por línea)</p>
+          <textarea
+            className="input mt-1 h-32"
+            value={featuresText}
+            onChange={(e) => setFeaturesText(e.target.value)}
+          />
 
           {form.stripePriceIdTest || form.stripePriceIdLive ? (
             <div className="text-xs text-ink/50 bg-ink/5 rounded-lg p-3 space-y-1">
