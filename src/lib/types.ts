@@ -150,7 +150,11 @@ export interface Plan {
   stripeProductIdLive?: string;
   price_usd?: number; // en centavos, para modo English
   price_idr?: number; // en centavos, para modo IDR
+  price_es_appears_in?: PriceLocaleScope; // dónde se muestra el precio base (MXN)
+  price_usd_appears_in?: PriceLocaleScope; // dónde se muestra el precio USD
 }
+
+export type PriceLocaleScope = "es" | "en" | "both";
 
 export interface Order {
   id: string;

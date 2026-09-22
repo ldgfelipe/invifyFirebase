@@ -13,7 +13,7 @@ import {
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
-import { formatPrice } from "@/lib/currency";
+import { getPlanDisplayPrice, isPlanVisible } from "@/lib/pricing";
 import type { PaymentProvider } from "@/lib/payments/types";
 
 type CheckoutResult =
@@ -173,6 +173,24 @@ export function PricingFlow({
     return <div className="text-center py-20 text-ink/60">Redirigiendo…</div>;
   }
 
+  const visiblePlans = plans.filter((p) => isPlanVisible(p, locale));
+
+  const displayFor = (plan: Plan | null) =>
+    plan ? getPlanDisplayPrice(plan, locale) : null;
+
+  function getIntervalLabel(plan: Plan) {
+    if (!plan.interval || plan.interval === "one_time") return "";
+    const label =
+      plan.interval === "month"
+        ? locale === "en" ? "month" : "mes"
+        : plan.interval === "year"
+          ? locale === "en" ? "year" : "año"
+          : plan.interval === "week"
+            ? locale === "en" ? "week" : "semana"
+            : plan.interval;
+    return `/${label}`;
+  }
+
   function selectPlan(plan: Plan) {
     setSelectedPlan(plan);
     setError(null);
@@ -233,7 +251,7 @@ export function PricingFlow({
       <div className="max-w-md mx-auto card p-8">
         <h2 className="font-serif text-xl text-center mb-6">Completar pago</h2>
         <p className="text-center text-sm text-ink/60 mb-4">
-          {selectedPlan.name} · {formatPrice(selectedPlan.price, selectedPlan.currency as "mxn" | "usd" | "eur")}
+          {selectedPlan.name} · {displayFor(selectedPlan)?.label ?? selectedPlan.name}
         </p>
         <Elements stripe={stripePromise} options={{ clientSecret }}>
           <EmbeddedCheckout
@@ -292,7 +310,7 @@ export function PricingFlow({
           </p>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {plans.map((plan, i) => (
+            {visiblePlans.map((plan, i) => (
               <div
                 key={plan.id}
                 className={cn(
@@ -309,15 +327,9 @@ export function PricingFlow({
               {locale === "en" && plan.name_en ? plan.name_en : plan.name}
             </h2>
                 <p className="text-3xl font-serif text-gold-500 my-4">
-                  {locale === "en"
-                    ? formatPrice(plan.price_usd ?? plan.price, "usd")
-                    : plan.currency === "idr"
-                      ? formatPrice(plan.price_idr ?? plan.price, "idr")
-                      : formatPrice(plan.price, plan.currency as "mxn" | "usd" | "eur")}
+                  {displayFor(plan)?.label}
                   {plan.interval && plan.interval !== "one_time" && (
-                    <span className="text-sm text-ink/60 ml-1">
-                      /{plan.interval === "month" ? "mes" : plan.interval}
-                    </span>
+                    <span className="text-sm text-ink/60 ml-1">{getIntervalLabel(plan)}</span>
                   )}
                 </p>
                 <ul className="space-y-2 text-sm text-ink/70 flex-1">
@@ -337,6 +349,12 @@ export function PricingFlow({
               </div>
             ))}
           </div>
+
+          {visiblePlans.length === 0 && (
+            <p className="text-center text-ink/50 py-10">
+              {locale === "en" ? "No plans available." : "No hay planes disponibles."}
+            </p>
+          )}
         </>
       ) : (
         <>
@@ -346,11 +364,7 @@ export function PricingFlow({
             <strong className="text-ink">{selectedPlan?.name}</strong>
             {selectedPlan && (
               <>
-                · {locale === "en"
-                  ? formatPrice(selectedPlan.price_usd ?? selectedPlan.price, "usd")
-                  : selectedPlan.currency === "idr"
-                    ? formatPrice(selectedPlan.price_idr ?? selectedPlan.price, "idr")
-                    : formatPrice(selectedPlan.price, selectedPlan.currency as "mxn" | "usd" | "eur")}</>
+                · {displayFor(selectedPlan)?.label}</>
             )}
           </p>
 
@@ -392,9 +406,7 @@ export function PricingFlow({
               {busyPlan
                 ? "Preparando…"
                 : selectedPlan
-                  ? `Pagar ${locale === "en"
-                    ? formatPrice(selectedPlan.price_usd ?? selectedPlan.price, "usd")
-                    : formatPrice(selectedPlan.price, selectedPlan.currency as "mxn" | "usd" | "eur")}`
+                  ? `Pagar ${displayFor(selectedPlan)?.label ?? ""}`
                   : "Pagar"}
             </button>
             <button

@@ -31,5 +31,5 @@ const app: FirebaseApp =
 export const serverDb: Firestore = getFirestore(app);
 
 if (process.env.NEXT_PUBLIC_EMULATOR === "true") {
-  connectFirestoreEmulator(serverDb, "localhost", 8080);
+  connectFirestoreEmulator(serverDb, "localhost", 8081);
 }

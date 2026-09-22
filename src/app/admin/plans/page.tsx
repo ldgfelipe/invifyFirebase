@@ -56,6 +56,8 @@ export default function AdminPlans() {
       currency: "mxn",
       interval: "one_time",
       features: [],
+      price_es_appears_in: "es",
+      price_usd_appears_in: "en",
       stripePriceId: "",
       stripePriceIdTest: "",
       stripePriceIdLive: "",
@@ -66,7 +68,14 @@ export default function AdminPlans() {
   }
   function startEdit(p: Plan) {
     setEditing(p);
-    setForm({ ...p, name_en: p.name_en ?? "", price_usd: p.price_usd ?? 0, price_idr: p.price_idr ?? 0 });
+    setForm({
+      ...p,
+      name_en: p.name_en ?? "",
+      price_usd: p.price_usd ?? 0,
+      price_idr: p.price_idr ?? 0,
+      price_es_appears_in: p.price_es_appears_in ?? "es",
+      price_usd_appears_in: p.price_usd_appears_in ?? "en",
+    });
     setFeaturesText((p.features ?? []).join("\n"));
     setErr(null);
     setMsg(null);
@@ -101,6 +110,8 @@ export default function AdminPlans() {
       currency: form.currency ?? "mxn",
       interval: form.interval ?? "one_time",
       features: parseFeatures(),
+      price_es_appears_in: form.price_es_appears_in ?? "es",
+      price_usd_appears_in: form.price_usd_appears_in ?? "en",
       stripePriceId: form.stripePriceId || form.stripePriceIdTest || form.stripePriceIdLive || "",
       stripePriceIdTest: form.stripePriceIdTest ?? "",
       stripePriceIdLive: form.stripePriceIdLive ?? "",
@@ -136,6 +147,8 @@ export default function AdminPlans() {
         currency: form.currency ?? "mxn",
         interval: form.interval ?? "one_time",
         features: parseFeatures(),
+        price_es_appears_in: form.price_es_appears_in ?? "es",
+        price_usd_appears_in: form.price_usd_appears_in ?? "en",
         stripePriceId: form.stripePriceId || form.stripePriceIdTest || form.stripePriceIdLive || "",
         stripePriceIdTest: form.stripePriceIdTest ?? "",
         stripePriceIdLive: form.stripePriceIdLive ?? "",
@@ -210,18 +223,33 @@ export default function AdminPlans() {
                   <div>
                     <p className="font-serif text-lg text-ink">{p.name}</p>
                     <p className="text-xs text-ink/50">
-                      {locale === "en" && p.name_en ? p.name_en : p.name} ·{ formatPrice(p.price, (p.currency as "mxn" | "usd" | "eur") || "mxn") } ·{" "}
-                      {p.interval === "one_time" || !p.interval
-                        ? "pago único"
-                        : p.interval === "year"
-                          ? "anual"
-                          : p.interval === "month"
-                            ? "mensual"
-                            : p.interval === "week"
-                              ? "semanal"
-                              : "diario"} ·{" "}
-                      {p.features?.length ?? 0} features
+                    {locale === "en" && p.name_en ? p.name_en : p.name} ·{ formatPrice(p.price, (p.currency as "mxn" | "usd" | "eur") || "mxn") } ·{" "}
+                    {p.interval === "one_time" || !p.interval
+                      ? "pago único"
+                      : p.interval === "year"
+                        ? "anual"
+                        : p.interval === "month"
+                          ? "mensual"
+                          : p.interval === "week"
+                            ? "semanal"
+                            : "diario"} ·{" "}
+                    {p.features?.length ?? 0} features ·{" "}
+                    <span className="inline-flex gap-1 align-middle">
+                      <span className="px-1.5 py-0.5 rounded bg-ink/5 text-[10px]">
+                        MXN→{labelScope(p.price_es_appears_in)}
+                      </span>
+                      {p.price_usd ? (
+                        <span className="px-1.5 py-0.5 rounded bg-ink/5 text-[10px]">
+                          USD→{labelScope(p.price_usd_appears_in)}
+                        </span>
+                      ) : null}
+                    </span>
+                  </p>
+                  {(p.price_usd ?? 0) > 0 && (
+                    <p className="text-xs text-ink/40">
+                      EN: {formatPrice(p.price_usd!, "usd")}
                     </p>
+                  )}
                   </div>
                   <div className="flex gap-2 flex-shrink-0">
                     <button onClick={() => startEdit(p)} className="btn-outline text-sm px-3 py-1">
@@ -264,11 +292,17 @@ export default function AdminPlans() {
             value={form.name ?? ""}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
+          <input
+            className="input"
+            placeholder="Nombre en inglés (ej. Premium)"
+            value={form.name_en ?? ""}
+            onChange={(e) => setForm({ ...form, name_en: e.target.value })}
+          />
           <div className="flex gap-3">
             <input
               className="input"
               type="number"
-              placeholder="Precio en centavos (ej. 49000)"
+              placeholder="Precio MXN en centavos (ej. 49000)"
               value={form.price ?? 0}
               onChange={(e) => setForm({ ...form, price: Number(e.target.value) })}
             />
@@ -299,10 +333,51 @@ export default function AdminPlans() {
             </select>
           </div>
           <p className="text-xs text-ink/50 -mt-2">
-            El precio es en centavos (49000 = $490.00). <strong>Pago único</strong> no necesita
+            Precio base en centavos (49000 = $490.00 MXN). <strong>Pago único</strong> no necesita
             productos/precios de Stripe: se cobra directo con Stripe, PayPal o Mercado Pago.
             Si eliges un intervalo recurrente (suscripción), usa «Guardar y sincronizar con Stripe» para crear el Price.
           </p>
+
+          <label className="block text-xs text-ink/70">
+            ¿Dónde aparece el precio base (MXN)?
+            <select
+              className="input mt-1"
+              value={form.price_es_appears_in ?? "es"}
+              onChange={(e) =>
+                setForm({ ...form, price_es_appears_in: e.target.value as Plan["price_es_appears_in"] })
+              }
+            >
+              <option value="es">Español (ES)</option>
+              <option value="en">English (EN)</option>
+              <option value="both">Ambos (ES + EN)</option>
+            </select>
+          </label>
+
+          <div className="flex gap-3 items-start">
+            <input
+              className="input"
+              type="number"
+              placeholder="Precio USD en centavos (ej. 2450 = $24.50)"
+              value={form.price_usd ?? 0}
+              onChange={(e) => setForm({ ...form, price_usd: Number(e.target.value) })}
+            />
+            <div className="flex-1">
+              <select
+                className="input"
+                value={form.price_usd_appears_in ?? "en"}
+                onChange={(e) =>
+                  setForm({ ...form, price_usd_appears_in: e.target.value as Plan["price_usd_appears_in"] })
+                }
+              >
+                <option value="es">Español (ES)</option>
+                <option value="en">English (EN)</option>
+                <option value="both">Ambos (ES + EN)</option>
+              </select>
+              <p className="text-[10px] text-ink/40 mt-1">
+                ¿Dónde aparece el precio en USD?
+              </p>
+            </div>
+          </div>
 
           <p className="text-xs text-ink/70">Features (una por línea)</p>
           <textarea
@@ -360,4 +435,15 @@ function StatusDot({ ok }: { ok: boolean }) {
       )}
     />
   );
+}
+
+function labelScope(scope: Plan["price_es_appears_in"] | undefined): string {
+  switch (scope ?? "es") {
+    case "en":
+      return "EN";
+    case "both":
+      return "ES+EN";
+    default:
+      return "ES";
+  }
 }

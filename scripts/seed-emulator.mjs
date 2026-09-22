@@ -9,7 +9,7 @@
 //
 // Requisitos:
 //   - Firebase emulators corriendo: npm run emulators
-//     (verifica que localhost:8080 responda antes de ejecutar)
+//     (verifica que localhost:8081 responda antes de ejecutar)
 //
 // Ejecutar:
 //   npm run seed:local
@@ -29,7 +29,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 
 // Force admin SDK to hit the local emulator.
-process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || "localhost:8080";
+process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || "localhost:8081";
 process.env.FIREBASE_AUTH_EMULATOR_HOST =
   process.env.FIREBASE_AUTH_EMULATOR_HOST || "localhost:9099";
 
@@ -84,7 +84,7 @@ async function seedPlans() {
   for (const plan of PLANS) {
     const stripePriceId = `price_local_${plan.id}`;
     await db.collection("plans").doc(plan.id).set(
-      { ...plan, currency: "usd", stripePriceId, updatedAt: Date.now() },
+      { ...plan, stripePriceId, updatedAt: Date.now() },
       { merge: true }
     );
     console.log(`  ✓ /plans/${plan.id}  stripePriceId=${stripePriceId}`);
@@ -139,7 +139,7 @@ async function main() {
   if (!PROJECT_ID) throw new Error("Falta NEXT_PUBLIC_FIREBASE_PROJECT_ID en .env.local");
 
   console.log(`Proyecto Firestore (emulador local): ${PROJECT_ID}`);
-  console.log(`  Emulador: localhost:8080\n`);
+  console.log(`  Emulador: localhost:8081\n`);
 
   await seedPlans();
   await seedTemplate();

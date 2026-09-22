@@ -41,7 +41,7 @@ export const storage: FirebaseStorage = getStorage(app);
 
 if (EMULATOR) {
   connectAuthEmulator(auth, "http://localhost:9099", { disableWarnings: true });
-  connectFirestoreEmulator(db, "localhost", 8080);
+  connectFirestoreEmulator(db, "localhost", 8081);
   connectStorageEmulator(storage, "localhost", 9199);
 }
 

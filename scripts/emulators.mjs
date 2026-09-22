@@ -32,7 +32,7 @@ if (!jreBin) {
 // ---- Env para el proceso firebase -------------------------------------------------
 // Las API routes (Admin SDK) leen estas variables para apuntar al emulador.
 const emulatorEnv = {
-  FIRESTORE_EMULATOR_HOST: "localhost:8080",
+  FIRESTORE_EMULATOR_HOST: "localhost:8081",
   FIREBASE_AUTH_EMULATOR_HOST: "localhost:9099",
   FIREBASE_STORAGE_EMULATOR_HOST: "localhost:9199",
   FIREBASE_EMULATOR_HUB: "localhost:4400",
@@ -48,7 +48,7 @@ const mergedEnv = {
 };
 
 console.log(`Java (Temurin): ${javaHome ?? "no encontrado"}`);
-console.log(`Emuladores: auth:9099 · firestore:8080 · storage:9199\n`);
+console.log(`Emuladores: auth:9099 · firestore:8081 · storage:9199\n`);
 
 const cmd = process.platform === "win32" ? "firebase.cmd" : "firebase";
 const child = spawn(cmd, ["emulators:start", "--only", "auth,firestore,storage", "--project", "invify-online"], {

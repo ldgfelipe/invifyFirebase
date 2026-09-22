@@ -2,7 +2,7 @@
 // dev-local.mjs
 // Arranca `next dev` con NEXT_PUBLIC_EMULATOR=true.
 //
-// Verifica primero que el Firestore emulator esté activo en localhost:8080.
+// Verifica primero que el Firestore emulator esté activo en localhost:8081.
 // Los emuladores deben estar corriendo en otra terminal:
 //   npm run emulators
 //
@@ -54,16 +54,16 @@ function checkPort(port, timeoutMs = 3000) {
 
 // ---- Main -----------------------------------------------------------------
 async function main() {
-  const up = await checkPort(8080);
+  const up = await checkPort(8081);
   if (!up) {
-    console.error("ERROR: No se detectó el emulador de Firestore en localhost:8080\n");
+    console.error("ERROR: No se detectó el emulador de Firestore en localhost:8081\n");
     console.error("Abre otra terminal y ejecuta:\n");
     console.error("  npm run emulators\n");
     console.error("y vuelve a intentar.");
     process.exit(1);
   }
 
-  console.log("✓ Emulador Firestore detectado (localhost:8080)\n");
+  console.log("✓ Emulador Firestore detectado (localhost:8081)\n");
 
   const envLocal = loadEnvFile(resolve(ROOT, ".env.local"));
   // NEXT_PUBLIC_EMULATOR hace que el client SDK use los emuladores.
@@ -71,7 +71,7 @@ async function main() {
   // apunten a los emuladores en lugar del proyecto real.
   const emulatorEnv = {
     NEXT_PUBLIC_EMULATOR: "true",
-    FIRESTORE_EMULATOR_HOST: "localhost:8080",
+    FIRESTORE_EMULATOR_HOST: "localhost:8081",
     FIREBASE_AUTH_EMULATOR_HOST: "localhost:9099",
     FIREBASE_STORAGE_EMULATOR_HOST: "localhost:9199",
     FIREBASE_EMULATOR_HUB: "localhost:4400",
