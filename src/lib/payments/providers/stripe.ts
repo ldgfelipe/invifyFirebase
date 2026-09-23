@@ -56,7 +56,7 @@ export async function stripeCreateCheckout(ctx: CheckoutContext): Promise<Checko
         quantity: 1,
       },
     ],
-    success_url: `${ctx.origin}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
+    success_url: `${ctx.origin}/thanks?provider=stripe&orderId=${ctx.orderId}&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${ctx.origin}/pricing`,
     metadata: {
       orderId: ctx.orderId,

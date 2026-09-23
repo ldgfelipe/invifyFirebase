@@ -63,16 +63,20 @@ export default function RootLayout({
   return (
     <html lang="es" className={`${playfair.variable} ${inter.variable}`}>
       <body className="min-h-screen flex flex-col">
-        {/* Google Tag Manager -->
-        <script>
-          window.dataLayer = window.dataLayer || [];
-          gtag('js', new Date());
-          gtag('config', 'GTM-MXNTHF83');
-        </script>
-        <!-- End Google Tag Manager -->
+        {/* Google Tag Manager */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+})(window,document,'script','dataLayer','GTM-MXNTHF83');`,
+          }}
+        />
+        {/* End Google Tag Manager */}
         <noscript>
           <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-MXNTHF83"
-            height="0" width="0" style="display:none;visibility:hidden"></iframe>
+            height="0" width="0" style={{ display: "none", visibility: "hidden" }}></iframe>
         </noscript>
         {/* End Google Tag Manager (noscript) */}
         <AuthProvider>

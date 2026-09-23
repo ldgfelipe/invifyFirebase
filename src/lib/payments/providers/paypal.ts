@@ -62,7 +62,7 @@ export async function paypalCreateCheckout(ctx: CheckoutContext): Promise<Checko
       application_context: {
         brand_name: "Invify",
         user_action: "PAY_NOW",
-        return_url: `${ctx.origin}/dashboard?paypal_order=${ctx.orderId}`,
+        return_url: `${ctx.origin}/thanks?provider=paypal&paypal_order=${ctx.orderId}`,
         cancel_url: `${ctx.origin}/pricing`,
       },
     }),

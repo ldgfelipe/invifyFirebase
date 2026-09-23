@@ -37,7 +37,7 @@ function EmbeddedCheckout({
   onError,
 }: {
   clientSecret: string;
-  onSuccess: () => void;
+  onSuccess: (orderId?: string) => void;
   onError: (msg: string) => void;
 }) {
   const stripe = useStripe();
@@ -52,7 +52,7 @@ function EmbeddedCheckout({
     const result = await stripe.confirmPayment({
       elements,
       confirmParams: {
-        return_url: `${window.location.origin}/dashboard`,
+        return_url: `${window.location.origin}/thanks?provider=stripe`,
       },
     });
 
@@ -65,11 +65,11 @@ function EmbeddedCheckout({
       onError(error.message ?? "Error en el pago");
     } else if (paymentIntent?.status === "succeeded" || paymentIntent?.status === "requires_capture") {
       console.log("[Stripe] Pago exitoso:", paymentIntent.id);
-      onSuccess();
+      onSuccess(paymentIntent?.metadata?.orderId ?? undefined);
     } else {
       console.log("[Stripe] Estado:", paymentIntent?.status);
       setProcessing(false);
-      onSuccess();
+      onSuccess(paymentIntent?.metadata?.orderId ?? undefined);
     }
   }
 
@@ -240,11 +240,12 @@ export function PricingFlow({
     }
   }
 
-  function handlePaymentSuccess() {
+  function handlePaymentSuccess(orderId?: string) {
     setShowEmbedded(false);
     setClientSecret(null);
     setSelectedPlan(null);
-    router.push("/dashboard");
+    const q = orderId ? `?provider=stripe&orderId=${orderId}` : "?provider=stripe";
+    router.push(`/thanks${q}`);
   }
 
   if (showEmbedded && clientSecret && selectedPlan) {

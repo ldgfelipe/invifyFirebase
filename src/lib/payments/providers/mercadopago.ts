@@ -38,7 +38,7 @@ export async function mercadopagoCreateCheckout(ctx: CheckoutContext): Promise<C
       ],
       external_reference: ctx.orderId,
       back_urls: {
-        success: `${ctx.origin}/dashboard?mp_order=${ctx.orderId}`,
+        success: `${ctx.origin}/thanks?provider=mercadopago&mp_order=${ctx.orderId}`,
         pending: `${ctx.origin}/pricing`,
         failure: `${ctx.origin}/pricing`,
       },
