@@ -214,6 +214,7 @@ export function PricingFlow({
           planId: plan.id,
           provider: selectedProvider,
           templateId,
+          locale,
           mode: isTestMode ? "test" : "live",
         }),
       });

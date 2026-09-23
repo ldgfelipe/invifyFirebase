@@ -333,9 +333,9 @@ export default function AdminPlans() {
             </select>
           </div>
           <p className="text-xs text-ink/50 -mt-2">
-            Precio base en centavos (49000 = $490.00 MXN). <strong>Pago único</strong> no necesita
-            productos/precios de Stripe: se cobra directo con Stripe, PayPal o Mercado Pago.
-            Si eliges un intervalo recurrente (suscripción), usa «Guardar y sincronizar con Stripe» para crear el Price.
+            Precio base en centavos (49000 = $490.00 MXN). El cobro usa el precio del idioma:
+            EN cobra el precio USD (Stripe/PayPal); Mercado Pago siempre cobra el base.
+            Los pagos se crean directo (sin productos/precios de Stripe), incluso suscripciones.
           </p>
 
           <label className="block text-xs text-ink/70">

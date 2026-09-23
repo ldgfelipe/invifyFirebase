@@ -11,6 +11,8 @@ import { paypalCreateCheckout } from "@/lib/payments/providers/paypal";
 import { mercadopagoCreateCheckout } from "@/lib/payments/providers/mercadopago";
 import type { CheckoutContext, PaymentMode, PaymentProvider } from "@/lib/payments/types";
 import { hasCredentials, getProviderCredentials } from "@/lib/payments/config";
+import { getPlanDisplayPrice } from "@/lib/pricing";
+import type { Plan } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -40,7 +42,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Token inválido" }, { status: 401 });
   }
 
-  let body: { planId?: string; provider?: PaymentProvider; templateId?: string; mode?: PaymentMode };
+  let body: { planId?: string; provider?: PaymentProvider; templateId?: string; mode?: PaymentMode; locale?: "en" | "es" };
   try {
     body = await req.json();
   } catch {
@@ -52,6 +54,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Proveedor no soportado: ${provider}` }, { status: 400 });
   }
   const mode: PaymentMode = body.mode === "live" ? "live" : "test";
+  const locale: "en" | "es" = body.locale === "en" ? "en" : "es";
 
   // ¿Está configurado el proveedor para este modo?
   const creds = await getProviderCredentials(provider, mode);
@@ -71,6 +74,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Plan sin precio o moneda" }, { status: 400 });
   }
 
+// Monto y moneda que se cobran = lo que se muestra en el idioma elegido
+// (EN -> USD, ES -> base). Mercado Pago México solo soporta MXN, así que ahí
+// siempre se cobra el precio base del plan.
+const baseCharge = {
+  amount: Number(plan.price ?? 0),
+  currency: String(plan.currency ?? "mxn").toLowerCase(),
+};
+let charge = baseCharge;
+if (provider !== "mercadopago") {
+  const dp = getPlanDisplayPrice(plan as Plan, locale);
+  if (dp && dp.source === "usd") {
+    charge = { amount: dp.cents, currency: "usd" };
+  }
+}
+
   // 1. Crear la orden
   const orderRef = adminDb.collection("orders").doc();
   const orderId = orderRef.id;
@@ -83,20 +101,21 @@ export async function POST(req: NextRequest) {
     status: "pending",
     provider,
     mode,
-    amount: plan.price,
-    currency: plan.currency,
+    locale,
+    amount: charge.amount,
+    currency: charge.currency,
     createdAt: Date.now(),
   });
 
-  await LogHelper.orderCreated(orderId, uid, plan.id, plan.price);
+  await LogHelper.orderCreated(orderId, uid, plan.id, charge.amount);
 
   // 2. Delegar al proveedor
   const ctx: CheckoutContext = {
     plan: {
       id: plan.id,
       name: plan.name,
-      price: plan.price,
-      currency: plan.currency,
+      price: charge.amount,
+      currency: charge.currency,
       interval: plan.interval,
       stripePriceIdTest: plan.stripePriceIdTest,
       stripePriceIdLive: plan.stripePriceIdLive,

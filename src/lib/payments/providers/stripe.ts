@@ -3,7 +3,8 @@
 // Pagos únicos (one_time): NO requieren Productos/Precios de Stripe.
 //   - Embedded: PaymentIntent con amount + currency.
 //   - Hosted: Checkout Session con line_items usando price_data inline.
-// Suscripciones: siguen necesitando un Price (se crea vía sync admin).
+// Suscripciones: también con price_data inline (monto/moneda del contexto),
+// sin depender de un Price sincronizado.
 // ============================================================================
 import Stripe from "stripe";
 import { getProviderCredentials } from "../config";
@@ -37,17 +38,24 @@ export async function stripeCreateCheckout(ctx: CheckoutContext): Promise<Checko
     };
   }
 
-  // ---- Suscripción hosted (Checkout Session con price_id del plan) ---------
-  const priceId =
-    ctx.mode === "live" ? ctx.plan.stripePriceIdLive! : ctx.plan.stripePriceIdTest!;
-  if (!priceId) {
-    throw new Error(`El plan ${ctx.plan.name} no tiene Price Stripe ${ctx.mode} para suscripción`);
-  }
-
+  // ---- Suscripción hosted (Checkout Session con price_data inline) ---------
+  // Cobra el monto/moneda del contexto (EN -> USD, ES -> MXN) sin depender de
+  // un Price sincronizado. El intervalo viene del plan y Stripe valida.
+  const interval = ctx.plan.interval as "day" | "week" | "month" | "year";
   const session = await stripe.checkout.sessions.create({
     mode: "subscription",
     customer_email: ctx.email || undefined,
-    line_items: [{ price: priceId, quantity: 1 }],
+    line_items: [
+      {
+        price_data: {
+          currency: ctx.plan.currency.toLowerCase(),
+          product_data: { name: ctx.plan.name },
+          unit_amount: ctx.plan.price,
+          recurring: { interval },
+        },
+        quantity: 1,
+      },
+    ],
     success_url: `${ctx.origin}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${ctx.origin}/pricing`,
     metadata: {
