@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/lib/i18n/provider";
 import { db } from "@/lib/firebase/client";
@@ -39,9 +39,8 @@ function trackConversion(o: Order) {
 }
 
 export default function ThanksPage() {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const { locale } = useLanguage();
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<"checking" | "paid" | "pending" | "error">(
     "checking"
@@ -85,8 +84,12 @@ export default function ThanksPage() {
   };
 
   useEffect(() => {
-    if (loading || !user) return;
+    setStatus("checking");
     if (!orderId) {
+      setStatus("paid");
+      return;
+    }
+    if (!user) {
       setStatus("paid");
       return;
     }
@@ -154,15 +157,7 @@ export default function ThanksPage() {
       cancelled = true;
       unsub?.();
     };
-  }, [user, loading, orderId, provider]);
-
-  if (loading) {
-    return <div className="text-center py-24 text-ink/60">Cargando…</div>;
-  }
-  if (!user) {
-    router.replace(`/login?redirect=/thanks`);
-    return <div className="text-center py-24 text-ink/60">Redirigiendo…</div>;
-  }
+  }, [user, orderId, provider]);
 
   const showChecking = status === "checking" || (status === "pending" && !orderId);
 
@@ -210,7 +205,10 @@ export default function ThanksPage() {
         )}
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-          <Link href="/dashboard" className="btn-primary w-full sm:w-auto px-8">
+          <Link
+            href={user ? "/dashboard" : "/login?redirect=/dashboard"}
+            className="btn-primary w-full sm:w-auto px-8"
+          >
             {t.goDashboard}
           </Link>
           <Link href="/templates" className="btn-outline w-full sm:w-auto px-8">
