@@ -6,6 +6,7 @@ import { getActiveTemplates, CATEGORIES } from "@/lib/catalog";
 import { getSiteSettings } from "@/lib/site";
 import { TemplateCard } from "@/components/catalog/TemplateCard";
 import { Hero } from "@/components/Hero";
+import { AiCta } from "@/components/aiwiz/AiCta";
 
 export const revalidate = 300;
 
@@ -17,6 +18,9 @@ export default async function HomePage() {
   return (
     <div>
       <Hero settings={settings} />
+
+      {/* INVITACIÓN CON IA */}
+      <AiCta />
 
       {/* CATEGORÍAS */}
       <section className="py-14 px-6 max-w-5xl mx-auto">
