@@ -8,6 +8,7 @@ const nextConfig = {
       { protocol: "https", hostname: "*.googleusercontent.com" },
       { protocol: "https", hostname: "images.unsplash.com" },
       { protocol: "https", hostname: "api.mapbox.com" },
+      { protocol: "https", hostname: "loremflickr.com" },
     ],
   },
   // Firebase Hosting Frameworks genera su propio bundle; "standalone" rompe el probe (timeout 10s en deploy)
