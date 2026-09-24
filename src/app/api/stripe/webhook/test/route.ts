@@ -53,8 +53,21 @@ export async function POST(req: NextRequest) {
     }
 
     // Procesa igual que el webhook
-    const tplSnap = await adminDb.collection("templates").doc(templateId).get();
+    // Las plantillas generadas con IA se guardan en /demoTemplates (colección
+    // de demos del cliente), no en /templates. El webhook de prueba procesa la
+    // compra y debe poder clonarla igual: busca en templates y, si no existe,
+    // cae aditivamente a demoTemplates del MISMO dueño (sin exponer demos ajenas).
+    let tplSnap = await adminDb.collection("templates").doc(templateId).get();
     if (!tplSnap.exists) {
+      const demoSnap = await adminDb
+        .collection("demoTemplates")
+        .where("id", "==", templateId)
+        .where("uid", "==", uid)
+        .limit(1)
+        .get();
+      if (!demoSnap.empty) tplSnap = demoSnap.docs[0];
+    }
+    if (!tplSnap || !tplSnap.exists) {
       return NextResponse.json({ error: "Plantilla no existe" }, { status: 404 });
     }
     const tplName = (tplSnap.data() as any).name ?? "mi-invitacion";

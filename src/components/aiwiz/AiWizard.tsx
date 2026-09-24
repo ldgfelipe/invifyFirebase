@@ -95,8 +95,15 @@ export function AiWizard({
         const data = await res.json().catch(() => ({}));
         throw new Error(data?.error || t.aiwiz.error);
       }
-      // Flujo de cierre: el usuario paga en /pricing y luego edita la demo.
-      router.push("/pricing");
+      // Flujo de cierre: el usuario paga en /pricing la plantilla IA generada
+      // (que vive en /demoTemplates). Se pasa el templateId para que el checkout
+      // y el procesado de la compra enlacen Y clonen exactamente esa plantilla.
+      const data = await res.json().catch(() => ({}));
+      const demoId =
+        typeof data?.id === "string"
+          ? data.id
+          : (data?.template?.id as string | undefined);
+      router.push(demoId ? `/pricing?template=${encodeURIComponent(demoId)}` : "/pricing");
     } catch (err: any) {
       setError(err?.message || t.aiwiz.error);
       setBusy(false);

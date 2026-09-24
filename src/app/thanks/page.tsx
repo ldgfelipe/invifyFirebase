@@ -121,6 +121,32 @@ export default function ThanksPage() {
           }
           setStatus("pending");
 
+          // PRUEBAS LOCALES: en modo test los webhooks no llegan a localhost:3000,
+          // así que auto-procesa la compra vía el endpoint de prueba (valida ownership,
+          // clona la plantilla y marca la order como procesada). En live no se toca nada.
+          if (
+            provider === "stripe" &&
+            o.mode === "test" &&
+            verified.current !== o.id
+          ) {
+            verified.current = o.id;
+            (async () => {
+              try {
+                const token = await user.getIdToken();
+                await fetch("/api/stripe/webhook/test", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({ orderId: orderId }),
+                });
+              } catch {
+                // si falla, onSnapshot/reactivación lo reintenta en el siguiente cambio
+              }
+            })();
+          }
+
           // Best effort: verifica con el proveedor (paypal/mp) cuando haya mode.
           if (
             provider !== "stripe" &&

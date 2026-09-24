@@ -131,7 +131,14 @@ export async function getTemplate(templateId: string): Promise<Template | null> 
 /** Obtiene una plantilla por id (Admin SDK, para webhooks). */
 export async function getTemplateAdmin(templateId: string): Promise<Template | null> {
   const snap = await adminDb.collection("templates").doc(templateId).get();
-  return snap.exists ? (snap.data() as Template) : null;
+  if (snap.exists) return snap.data() as Template;
+
+  // Fallback aditivo: plantillas generadas con IA viven en /demoTemplates
+  // (no en /templates). El webhook/test y el clonado tras compra deben poder
+  // resolverlas igual, sin exponer demos ajenas (el ownership ya se valida
+  // en cloneTemplateToInvitation vía order.uid).
+  const demo = await adminDb.collection("demoTemplates").doc(templateId).get();
+  return demo.exists ? (demo.data() as Template) : null;
 }
 
 /**
