@@ -6,7 +6,7 @@
 //    partir de las respuestas, para que el flujo funcione sin depender de una
 //    API externa. Si se conecta una IA real, su JSON reemplaza este mock.
 // ============================================================================
-import type { BuilderConfig, TemplateCategory } from "../types";
+import type { AiImageSource, BuilderConfig, TemplateCategory } from "../types";
 import {
   ATMOSPHERE_OPTIONS,
   CATEGORY_OPTIONS,
@@ -174,8 +174,25 @@ function pick<T>(list: T[], id: string, fallback: T): T {
   return list.find((o) => (o as { id?: string }).id === id) ?? fallback;
 }
 
-function imageUrl(seed: string, w: number, h: number): string {
-  return `https://picsum.photos/seed/${seed}/${w}/${h}`;
+/**
+ * Resuelve la URL de una imagen del prototipo.
+ * "local" (por defecto) usa /api/thumb/lock/N, que se sirve desde el propio
+ * dominio y no depende de un tercero; "picsum" conserva el servicio externo.
+ */
+function imageUrl(seed: string, w: number, h: number, source: AiImageSource = "local"): string {
+  if (source === "picsum") return `https://picsum.photos/seed/${seed}/${w}/${h}`;
+  const n = (Math.abs(hashSeed(seed)) % 90) + 1;
+  return `/api/thumb/lock/${n}`;
+}
+
+/** Hash determinista (FNV-1a de 32 bits) para derivar un número estable. */
+function hashSeed(seed: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    h ^= seed.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h;
 }
 
 function defaultTargetDate(lang: Lang): string {
@@ -186,12 +203,20 @@ function defaultTargetDate(lang: Lang): string {
 export interface GenerateInput {
   language: Lang;
   answers: WizardAnswers;
+  /** Reglas de negocio anexadas al prompt (editables desde el admin). */
+  customInstructions?: string;
+  /** Origen de las imágenes del prototipo (configurable en el admin). */
+  imageSource?: AiImageSource;
 }
 
 // ---------------------------------------------------------------------------
 // 1) Prompt principal para la IA
 // ---------------------------------------------------------------------------
-export function buildAIPrompt({ language, answers }: GenerateInput): string {
+export function buildAIPrompt({
+  language,
+  answers,
+  customInstructions = "",
+}: GenerateInput): string {
   const catOption = pick(CATEGORY_OPTIONS, answers.category, CATEGORY_OPTIONS[0]);
   const atm = pick(ATMOSPHERE_OPTIONS, answers.atmosphere, ATMOSPHERE_OPTIONS[0]);
   const img = pick(IMAGE_STYLE_OPTIONS, answers.imageStyle, IMAGE_STYLE_OPTIONS[0]);
@@ -227,13 +252,14 @@ export function buildAIPrompt({ language, answers }: GenerateInput): string {
 Requisitos: Template: { id (slug), name, category, thumbnailUrl, previewUrl, active: true, createdAt, builderConfig: { theme: { primaryColor, background, fontFamily }, modules: [ array ordenado con id, type, visible ] } }.
 Tipos: preloader, header (SIEMPRE), countdown, audio, carousel, location, dresscode, itinerary, giftTable, quiz, rsvp, text.
 Concepto del usuario: ${concept}. Categoría: ${categoryLabel}. Imágenes estilo: ${imageStyleLabel}.
-Devuelve ÚNICAMENTE el JSON.`;
+IMPORTANTE: en thumbnailUrl, previewUrl y en los campos imageUrl usa rutas locales con el formato /api/thumb/lock/N (N un entero). No uses URLs externas.
+${customInstructions ? `Reglas adicionales:\n${customInstructions}\n` : ""}Devuelve ÚNICAMENTE el JSON.`;
 }
 
 // ---------------------------------------------------------------------------
 // 2) Plantilla mock determinista (fallback / demo)
 // ---------------------------------------------------------------------------
-export function buildMockTemplate({ language, answers }: GenerateInput): {
+export function buildMockTemplate({ language, answers, imageSource = "local" }: GenerateInput): {
   id: string;
   name: string;
   category: TemplateCategory;
@@ -251,7 +277,7 @@ export function buildMockTemplate({ language, answers }: GenerateInput): {
   const name = `Demo ${names}`;
   const id = `demo-${slugify(names || catOption.id)}-${Date.now().toString(36)}`;
   const seed = `invify-${catOption.id}-${img.id}`;
-  const headerImage = imageUrl(seed, 1200, 800);
+  const headerImage = imageUrl(seed, 1200, 800, imageSource);
   const title = c.headers[catOption.id as keyof typeof c.headers] ?? c.headers.boda;
   const subtitle = c.subtitles[catOption.id as keyof typeof c.subtitles] ?? c.subtitles.boda;
 
@@ -268,7 +294,7 @@ export function buildMockTemplate({ language, answers }: GenerateInput): {
     type: "preloader",
     visible: true,
     text: names,
-    imageUrl: imageUrl(seed, 400, 400),
+    imageUrl: imageUrl(seed, 400, 400, imageSource),
   });
 
   modules.push({
@@ -346,9 +372,9 @@ export function buildMockTemplate({ language, answers }: GenerateInput): {
     type: "carousel",
     visible: true,
     images: [
-      { url: imageUrl(seed + "-1", 800, 600) },
-      { url: imageUrl(seed + "-2", 800, 600) },
-      { url: imageUrl(seed + "-3", 800, 600) },
+      { url: imageUrl(seed + "-1", 800, 600, imageSource) },
+      { url: imageUrl(seed + "-2", 800, 600, imageSource) },
+      { url: imageUrl(seed + "-3", 800, 600, imageSource) },
     ],
   });
 
@@ -375,8 +401,8 @@ export function buildMockTemplate({ language, answers }: GenerateInput): {
     id,
     name,
     category,
-    thumbnailUrl: imageUrl(seed, 800, 600),
-    previewUrl: imageUrl(seed, 1200, 800),
+    thumbnailUrl: imageUrl(seed, 800, 600, imageSource),
+    previewUrl: imageUrl(seed, 1200, 800, imageSource),
     builderConfig: {
       theme: {
         primaryColor: atm.palette.primary,

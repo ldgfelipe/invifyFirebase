@@ -59,7 +59,9 @@ export default function AdminLayout({
           <AdminLink href="/admin/users" label="Usuarios" />
           <AdminLink href="/admin/sales" label="Ventas / Compras" />
           <AdminLink href="/admin/contacts" label="Contactos" />
+          <AdminLink href="/admin/asistente-ia" label="Asistente IA" />
           <AdminLink href="/admin/settings" label="Sitio / Landing" />
+          <AdminLink href="/admin/logs" label="Auditoría" />
         </nav>
         <Link href="/" className="text-ink/50 text-sm mt-10 inline-block hover:text-gold-500">
           ← Ver sitio

@@ -391,6 +391,64 @@ export interface SiteSettings {
   stripeTestMode?: boolean; // true = test, false = live
 }
 
+// ----------------------------- Config del asistente IA -----------------------
+// Documento /aiConfig/global. Se guarda FUERA de /site/config a propósito:
+// la colección /site es legible por cualquier visitante, mientras que
+// /aiConfig solo la leen y escriben el Admin SDK y los usuarios con rol admin.
+export type AiProvider = "openai" | "openai-compatible";
+export type AiLanguageMode = "auto" | "es" | "en";
+export type AiImageSource = "local" | "picsum";
+
+export interface AiTestResult {
+  ok: boolean;
+  message: string;
+  model?: string;
+  latencyMs?: number;
+  at: number;
+}
+
+export interface AiSettings {
+  // Interruptor maestro. false = el wizard siempre usa el mock determinista.
+  enabled: boolean;
+  provider: AiProvider;
+  // Credencial. Nunca se devuelve al cliente en claro (ver maskApiKey).
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+
+  // Parámetros de generación
+  temperature: number;   // 0 – 2
+  maxTokens: number;     // 64 – 16000
+  // Instrucción de sistema: define el rol y el tono de la IA.
+  systemPrompt: string;
+  // Reglas de negocio extra que se anexan al prompt de cada generación.
+  customInstructions: string;
+
+  // Idioma de salida. "auto" = el idioma que eligió el usuario en el wizard.
+  languageMode: AiLanguageMode;
+
+  // Comportamiento
+  fallbackToMock: boolean;      // si la IA falla, genera con el mock
+  imageSource: AiImageSource;   // local = /api/thumb/lock/N, picsum = externo
+  maxGenerationsPerDay: number; // 0 = sin límite
+
+  // Nombres por defecto cuando el usuario no los escribe.
+  defaultNames: string;
+  defaultNamesEn: string;
+
+  // Resultado del último test de conexión.
+  lastTest?: AiTestResult;
+  updatedAt?: number;
+  updatedBy?: string;
+}
+
+/** Vista pública de la config: la apiKey viene enmascarada. */
+export type AiSettingsPublic = Omit<AiSettings, "apiKey"> & {
+  apiKeyMasked: string;
+  hasApiKey: boolean;
+  apiKeyFromEnv: boolean;
+};
+
 // ----------------------------- Páginas CMS -----------------------------------
 // Cada página es un documento en /pages/{pageId}
 export interface Page {

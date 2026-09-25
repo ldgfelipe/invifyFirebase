@@ -105,6 +105,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ---- /aiConfig : config del asistente IA (contiene la API key) ----
+    // A diferencia de /site, NO es pública: solo admin. El flujo normal usa el
+    // Admin SDK desde /api/admin/ai-config, que ya valida el rol.
+    match /aiConfig/{docId} {
+      allow read, write: if isAdmin();
+    }
+
     // ---- /orders : solo el dueño del pedido y admin ----
     match /orders/{orderId} {
       allow read: if isOwner(resource.data.uid) || isAdmin();

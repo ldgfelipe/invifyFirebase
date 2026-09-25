@@ -1,12 +1,14 @@
 // ============================================================================
 // API /api/ai/generate-template
-// Recibe las respuestas del wizard + idioma activo, arma el prompt principal
-// para la IA, genera el builderConfig (IA real si hay clave configurada, si no
-// usa el mock determinista) y guarda el resultado en /demoTemplates marcado
-// como 'demo' y por categoría. Devuelve el id para seguimiento.
+// Recibe las respuestas del wizard + idioma activo, carga la configuración del
+// asistente desde /aiConfig/global (ver src/lib/ai/config.ts), arma el prompt
+// con las reglas que definió el admin y genera el builderConfig (IA real si está
+// habilitada, si no el mock determinista). Guarda el resultado en /demoTemplates
+// marcado como 'demo' y por categoría. Devuelve el id para seguimiento.
 // ============================================================================
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { callAi, getAiSettings } from "@/lib/ai/config";
 import {
   buildAIPrompt,
   buildMockTemplate,
@@ -23,53 +25,9 @@ import {
 
 export const runtime = "nodejs";
 
-function excerptJson(content: string): any | null {
-  const start = content.indexOf("{");
-  if (start === -1) return null;
-  let depth = 0;
-  for (let i = start; i < content.length; i++) {
-    if (content[i] === "{") depth++;
-    else if (content[i] === "}") {
-      depth--;
-      if (depth === 0) {
-        try {
-          return JSON.parse(content.slice(start, i + 1));
-        } catch {
-          return null;
-        }
-      }
-    }
-  }
-  return null;
-}
-
-async function generateWithAI(prompt: string): Promise<any | null> {
-  const key = process.env.OPENAI_API_KEY || process.env.AI_API_KEY;
-  if (!key) return null;
-  try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        model: process.env.AI_MODEL || "gpt-4o-mini",
-        temperature: 0.6,
-        response_format: { type: "json_object" },
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const content: string = data?.choices?.[0]?.message?.content ?? "";
-    return excerptJson(content);
-  } catch {
-    return null;
-  }
-}
-
 export async function POST(req: NextRequest) {
+  const settings = await getAiSettings();
+
   let uid: string | null = null;
   const idToken = (req.headers.get("authorization") ?? "").replace("Bearer ", "");
   if (idToken) {
@@ -87,7 +45,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Body inválido" }, { status: 400 });
   }
 
-  const language: Lang = body.language === "en" ? "en" : "es";
+  // "auto" = el idioma que eligió el usuario; "es"/"en" = forzados por el admin.
+  const requested: Lang = body.language === "en" ? "en" : "es";
+  const language: Lang = settings.languageMode === "auto" ? requested : settings.languageMode;
 
   const valid = (list: { id: string }[], id: string | undefined, fallback: string) =>
     list.some((o) => o.id === id) ? id! : fallback;
@@ -103,18 +63,51 @@ export async function POST(req: NextRequest) {
     imageStyle: valid(IMAGE_STYLE_OPTIONS, body.imageStyle, DEFAULT_ANSWERS.imageStyle),
   };
 
-  const prompt = buildAIPrompt({ language, answers });
+  if (!answers.names.trim()) {
+    answers.names =
+      language === "en" ? settings.defaultNamesEn : settings.defaultNames;
+  }
 
-  // Intenta IA real; si no hay clave o falla, usa el mock determinista.
-  const aiResult = await generateWithAI(prompt);
-  const mock = buildMockTemplate({ language, answers });
+  const prompt = buildAIPrompt({
+    language,
+    answers,
+    customInstructions: settings.customInstructions,
+  });
+
+  // Intenta IA real; si está apagada, no hay clave o falla, usa el mock.
+  let aiResult: any | null = null;
+  let aiError: string | null = null;
+  if (settings.enabled && settings.apiKey) {
+    try {
+      const response = await callAi(settings, [
+        ...(settings.systemPrompt?.trim()
+          ? [{ role: "system" as const, content: settings.systemPrompt }]
+          : []),
+        { role: "user" as const, content: prompt },
+      ]);
+      aiResult = response?.json ?? null;
+    } catch (err: any) {
+      aiError = err?.message ?? "Error desconocido";
+      if (!settings.fallbackToMock) {
+        return NextResponse.json({ error: `Error de la IA: ${aiError}` }, { status: 502 });
+      }
+    }
+  }
+
+  const mock = buildMockTemplate({ language, answers, imageSource: settings.imageSource });
   const builderConfig = aiResult?.builderConfig ?? mock.builderConfig;
   const template = {
     id: mock.id,
-    name: mock.name,
+    name: typeof aiResult?.name === "string" && aiResult.name.trim() ? aiResult.name : mock.name,
     category: mock.category,
-    thumbnailUrl: mock.thumbnailUrl,
-    previewUrl: mock.previewUrl,
+    thumbnailUrl:
+      typeof aiResult?.thumbnailUrl === "string" && aiResult.thumbnailUrl.trim()
+        ? aiResult.thumbnailUrl
+        : mock.thumbnailUrl,
+    previewUrl:
+      typeof aiResult?.previewUrl === "string" && aiResult.previewUrl.trim()
+        ? aiResult.previewUrl
+        : mock.previewUrl,
   };
 
   const docData = {
@@ -130,7 +123,9 @@ export async function POST(req: NextRequest) {
     builderConfig,
     thumbnailUrl: template.thumbnailUrl,
     previewUrl: template.previewUrl,
-    generatedByAI: Boolean(aiResult),
+    generatedByAI: Boolean(aiResult?.builderConfig),
+    aiModel: aiResult?.builderConfig ? settings.model : null,
+    aiError: aiError ?? null,
     createdAt: Date.now(),
   };
 
@@ -141,6 +136,7 @@ export async function POST(req: NextRequest) {
       name: template.name,
       category: template.category,
       demo: true,
+      generatedByAI: docData.generatedByAI,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
