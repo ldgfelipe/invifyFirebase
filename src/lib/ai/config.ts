@@ -85,18 +85,22 @@ function fromEnv(): Partial<AiSettings> {
   return { apiKey, model: process.env.AI_MODEL || AI_DEFAULT_MODEL };
 }
 
+/** Lee el documento crudo de Firestore, sin aplicar el fallback del entorno. */
+async function readStoredDoc(): Promise<Record<string, unknown>> {
+  try {
+    const snap = await adminDb.collection(DOC_PATH.collection).doc(DOC_PATH.docId).get();
+    return snap.exists ? ((snap.data() ?? {}) as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Carga la config efectiva del asistente.
  * Always returns a complete object; never throws.
  */
 export async function getAiSettings(): Promise<AiSettings> {
-  let stored: Record<string, unknown> = {};
-  try {
-    const snap = await adminDb.collection(DOC_PATH.collection).doc(DOC_PATH.docId).get();
-    if (snap.exists) stored = snap.data() as Record<string, unknown>;
-  } catch {
-    stored = {};
-  }
+  const stored = await readStoredDoc();
 
   const env = fromEnv();
   // La config guardada manda; la env solo rellena lo que falte.
@@ -104,10 +108,16 @@ export async function getAiSettings(): Promise<AiSettings> {
   return normalizeAiSettings(merged, { ...DEFAULT_AI_SETTINGS, ...env });
 }
 
-/** Indica si la apiKey proviene de una variable de entorno (no editable en el panel). */
+/**
+ * Indica si la apiKey proviene de una variable de entorno (no editable en el
+ * panel). Debe leer el documento crudo: getAiSettings() ya resolvió el fallback
+ * del entorno, así que consultarla devolvería siempre false.
+ */
 export async function isApiKeyFromEnv(): Promise<boolean> {
-  const stored = await getAiSettings();
-  return !stored.apiKey && Boolean(process.env.OPENAI_API_KEY || process.env.AI_API_KEY);
+  const envKey = process.env.OPENAI_API_KEY || process.env.AI_API_KEY || "";
+  if (!envKey) return false;
+  const stored = await readStoredDoc();
+  return !str(stored.apiKey, "");
 }
 
 /** Enmascara la clave para poder mostrarla sin exponerla. */

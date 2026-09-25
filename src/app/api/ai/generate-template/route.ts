@@ -25,8 +25,48 @@ import {
 
 export const runtime = "nodejs";
 
+/**
+ * Cuenta las generaciones reales de hoy. El límite solo aplica a llamadas
+ * pagadas a la IA: cuando el asistente está apagado o cae al mock, generar es
+ * gratis y no debe bloquearse. 0 = sin límite.
+ */
+async function overDailyLimit(limit: number): Promise<{ used: number; limit: number } | null> {
+  if (limit <= 0) return null;
+  try {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const used = await adminDb
+      .collection("demoTemplates")
+      .where("createdAt", ">=", startOfDay.getTime())
+      .where("generatedByAI", "==", true)
+      .count()
+      .get();
+    const count = used.data().count;
+    return count >= limit ? { used: count, limit } : null;
+  } catch {
+    // Si el conteo falla, no se bloquea al usuario por un problema de métricas.
+    return null;
+  }
+}
+
 export async function POST(req: NextRequest) {
   const settings = await getAiSettings();
+  const willCallAi = Boolean(settings.enabled && settings.apiKey);
+
+  if (willCallAi) {
+    const capped = await overDailyLimit(settings.maxGenerationsPerDay);
+    if (capped) {
+      return NextResponse.json(
+        {
+          error: `Se alcanzó el límite diario de ${capped.limit} generaciones. Se restablece a medianoche.`,
+          limitReached: true,
+          used: capped.used,
+          limit: capped.limit,
+        },
+        { status: 429 }
+      );
+    }
+  }
 
   let uid: string | null = null;
   const idToken = (req.headers.get("authorization") ?? "").replace("Bearer ", "");
@@ -77,7 +117,7 @@ export async function POST(req: NextRequest) {
   // Intenta IA real; si está apagada, no hay clave o falla, usa el mock.
   let aiResult: any | null = null;
   let aiError: string | null = null;
-  if (settings.enabled && settings.apiKey) {
+  if (willCallAi) {
     try {
       const response = await callAi(settings, [
         ...(settings.systemPrompt?.trim()
