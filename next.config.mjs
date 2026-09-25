@@ -2,7 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    // Dominios permitidos para optimización de imágenes (Firebase Storage + CDN de mapas).
+    // Dominios permitidos para optimizaciòn de imǭgenes (Firebase Storage + CDN de mapas).
     remotePatterns: [
       { protocol: "https", hostname: "firebasestorage.googleapis.com" },
       { protocol: "https", hostname: "*.googleusercontent.com" },
