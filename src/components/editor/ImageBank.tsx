@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 type Props = {
   onSelect: (url: string) => void;
@@ -26,10 +26,23 @@ export function ImageBank({ onSelect, onClose }: Props) {
   const [query, setQuery] = useState("wedding");
   const [lockOffset, setLockOffset] = useState(0);
 
+  // Antes usaba loremflickr.com, que devuelve 401 ante hotlink y dejaba el
+  // banco en blanco. Ahora las imágenes se sirven desde /api/thumb/lock/N:
+  // sin dependencias externas y con caché. La palabra clave sigue sirviendo
+  // para elegir una familia distinta de imágenes.
+  const base = useMemo(() => {
+    let h = 0x811c9dc5;
+    const q = (query || "invify").toLowerCase();
+    for (let i = 0; i < q.length; i++) {
+      h ^= q.charCodeAt(i);
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return (h % 70) + 1;
+  }, [query]);
+
   const images = Array.from({ length: 12 }, (_, i) => {
-    const lock = i + 1 + lockOffset * 12;
-    // loremflickr con keyword + lock para variedad temática gratuita sin API key
-    return `https://loremflickr.com/400/300/${encodeURIComponent(query)}?lock=${lock}`;
+    const lock = base + i + lockOffset * 12;
+    return `/api/thumb/lock/${lock}`;
   });
 
   return (
@@ -37,8 +50,10 @@ export function ImageBank({ onSelect, onClose }: Props) {
       <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[85vh] overflow-hidden flex flex-col">
         <div className="p-4 border-b border-ink/10 flex items-center justify-between gap-3">
           <div>
-            <h3 className="font-serif text-lg text-ink">Banco de imágenes gratis</h3>
-            <p className="text-xs text-ink/50">Busca y haz clic para agregar. Imágenes de LoremFlickr (uso libre para mock).</p>
+            <h3 className="font-serif text-lg text-ink">Banco de imágenes</h3>
+            <p className="text-xs text-ink/50">
+              Busca por palabra clave y haz clic para agregar. Se sirven desde tu propio dominio.
+            </p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-ink/5 rounded-full">✕</button>
         </div>
@@ -83,9 +98,7 @@ export function ImageBank({ onSelect, onClose }: Props) {
               <button
                 key={url}
                 onClick={() => {
-                  // loremflickr 400/300 -> usa 800/600 para guardar en alta
-                  const high = url.replace("/400/300/", "/800/600/");
-                  onSelect(high);
+                  onSelect(url);
                   onClose();
                 }}
                 className="group relative aspect-[4/3] rounded-xl overflow-hidden border border-ink/10 hover:border-gold-300 hover:shadow-md transition"

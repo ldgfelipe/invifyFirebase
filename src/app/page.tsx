@@ -6,6 +6,7 @@ import { getActiveTemplates, CATEGORIES } from "@/lib/catalog";
 import { getSiteSettings } from "@/lib/site";
 import { TemplateCard } from "@/components/catalog/TemplateCard";
 import { Hero } from "@/components/Hero";
+import { PromoBanner } from "@/components/PromoBanner";
 import { AiCta } from "@/components/aiwiz/AiCta";
 
 export const revalidate = 300;
@@ -18,6 +19,8 @@ export default async function HomePage() {
   return (
     <div>
       <Hero settings={settings} />
+
+      <PromoBanner banner={settings.banner} page="home" />
 
       {/* INVITACIÓN CON IA */}
       <AiCta />

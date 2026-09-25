@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase/client";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import type { SiteSettings } from "@/lib/types";
+import { DEFAULT_BANNER, type SiteSettings } from "@/lib/types";
 
 export default function AdminSiteSettings() {
   const { user } = useAuth();
@@ -19,11 +19,15 @@ export default function AdminSiteSettings() {
     metaDescription: "",
     metaDescription_en: "",
     stripeTestMode: true,
+    banner: { ...DEFAULT_BANNER },
   });
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<"general" | "stripe" | "paypal" | "mercadopago">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "banner" | "marketing" | "stripe" | "paypal" | "mercadopago">("general");
+
+  const setBanner = (patch: Partial<NonNullable<SiteSettings["banner"]>>) =>
+    setForm((prev) => ({ ...prev, banner: { ...DEFAULT_BANNER, ...(prev.banner ?? {}), ...patch } }));
 
   useEffect(() => {
     if (!user) return;
@@ -31,7 +35,11 @@ export default function AdminSiteSettings() {
       const snap = await getDoc(doc(db, "site", "config"));
       if (snap.exists()) {
         const data = snap.data() as SiteSettings;
-        setForm(prev => ({ ...prev, ...data }));
+        setForm(prev => ({
+          ...prev,
+          ...data,
+          banner: { ...DEFAULT_BANNER, ...(data.banner ?? {}) },
+        }));
       }
     })();
   }, [user]);
@@ -48,6 +56,8 @@ export default function AdminSiteSettings() {
     try {
       const changedSections: string[] = [];
       if (activeTab === "general") changedSections.push("landing", "modo_stripe");
+      if (activeTab === "banner") changedSections.push("banner");
+      if (activeTab === "marketing") changedSections.push("marketing");
       if (activeTab === "stripe") changedSections.push("stripe_keys");
       if (activeTab === "paypal") changedSections.push("paypal_keys");
       if (activeTab === "mercadopago") changedSections.push("mercadopago_keys");
@@ -97,7 +107,7 @@ export default function AdminSiteSettings() {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-6 border-b border-ink/10">
-        {["general", "stripe", "paypal", "mercadopago"].map((tab) => (
+        {["general", "banner", "marketing", "stripe", "paypal", "mercadopago"].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab as any)}
@@ -108,6 +118,8 @@ export default function AdminSiteSettings() {
             }`}
           >
             {tab === "general" && "🌐 General"}
+            {tab === "banner" && "📣 Banner"}
+            {tab === "marketing" && "📊 Marketing"}
             {tab === "stripe" && "💳 Stripe"}
             {tab === "paypal" && "🅿️ PayPal"}
             {tab === "mercadopago" && "💚 Mercado Pago"}
@@ -116,6 +128,254 @@ export default function AdminSiteSettings() {
       </div>
 
       <div className="card p-6 space-y-6">
+        {activeTab === "marketing" && (
+          <>
+            <section>
+              <h2 className="font-serif text-lg text-ink mb-4 border-b border-ink/10 pb-2">
+                Analítica y píxeles
+              </h2>
+              <p className="text-sm text-ink/60 mb-4">
+                Se inyectan en todas las páginas. Si un campo queda vacío, el script no se carga.
+              </p>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm text-ink/70 block mb-1">Google Tag Manager ID</label>
+                  <input
+                    className="input"
+                    value={form.gtmId ?? ""}
+                    onChange={(e) => setForm({ ...form, gtmId: e.target.value })}
+                    placeholder="GTM-XXXXXXX"
+                  />
+                  <p className="text-xs text-ink/50 mt-1">
+                    Formato <code className="text-ink/70">GTM-</code> seguido de 4 a 10 letras o
+                    números. Un ID con otro formato se ignora para no romper el sitio.
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm text-ink/70 block mb-1">Meta Pixel ID</label>
+                  <input
+                    className="input"
+                    value={form.metaPixelId ?? ""}
+                    onChange={(e) => setForm({ ...form, metaPixelId: e.target.value })}
+                    placeholder="123456789012345"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section>
+              <h2 className="font-serif text-lg text-ink mb-4 border-b border-ink/10 pb-2">
+                Scripts personalizados
+              </h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm text-ink/70 block mb-1">HTML en &lt;head&gt;</label>
+                  <textarea
+                    className="input mt-1 h-32 font-mono text-xs"
+                    value={form.customHeadScripts ?? ""}
+                    onChange={(e) => setForm({ ...form, customHeadScripts: e.target.value })}
+                    placeholder={'<link rel="preconnect" href="https://fonts.googleapis.com">'}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-ink/70 block mb-1">HTML antes de &lt;/body&gt;</label>
+                  <textarea
+                    className="input mt-1 h-32 font-mono text-xs"
+                    value={form.customBodyScripts ?? ""}
+                    onChange={(e) => setForm({ ...form, customBodyScripts: e.target.value })}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-red-600/80 mt-3">
+                Solo tú puedes escribir esto, pero el contenido se inyecta tal cual en cada
+                página. No pegues claves de API ni tokens: quedaron visibles para cualquier
+                visitante. Para credenciales usa las variables de entorno.
+              </p>
+            </section>
+          </>
+        )}
+
+        {activeTab === "banner" && (
+          <>
+            <section>
+              <h2 className="font-serif text-lg text-ink mb-4 border-b border-ink/10 pb-2">
+                Banner promocional
+              </h2>
+              <p className="text-sm text-ink/60 mb-4">
+                Bloque que aparece en el inicio y/o en planes. Cada campo tiene su versión en
+                español y en inglés; si la versión en inglés queda vacía, se muestra la de español.
+              </p>
+
+              <div className="space-y-4">
+                <label className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={form.banner?.enabled ?? false}
+                    onChange={(e) => setBanner({ enabled: e.target.checked })}
+                    className="w-4 h-4"
+                  />
+                  <span className="font-medium text-ink">Mostrar el banner</span>
+                </label>
+
+                <div>
+                  <label className="text-sm text-ink/70 block mb-1">¿Dónde se muestra?</label>
+                  <select
+                    className="input"
+                    value={form.banner?.pages ?? "both"}
+                    onChange={(e) => setBanner({ pages: e.target.value as any })}
+                  >
+                    <option value="both">Inicio y planes</option>
+                    <option value="home">Solo inicio</option>
+                    <option value="pricing">Solo planes y precios</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-sm text-ink/70 block mb-1">Estilo</label>
+                  <select
+                    className="input"
+                    value={form.banner?.variant ?? "gold"}
+                    onChange={(e) => setBanner({ variant: e.target.value as any })}
+                  >
+                    <option value="gold">Dorado (champagne)</option>
+                    <option value="dark">Oscuro</option>
+                    <option value="light">Claro</option>
+                    <option value="gradient">Degradado</option>
+                  </select>
+                </div>
+              </div>
+            </section>
+
+            <section className="bg-blue-50/50 border border-blue-100 rounded-lg p-4 space-y-4">
+              <h2 className="font-serif text-lg text-ink mb-2">Contenido (ES)</h2>
+              <div>
+                <label className="text-sm text-ink/70 block mb-1">Etiqueta</label>
+                <input
+                  className="input"
+                  value={form.banner?.badge ?? ""}
+                  onChange={(e) => setBanner({ badge: e.target.value })}
+                  placeholder="Nuevo"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-ink/70 block mb-1">Título</label>
+                <input
+                  className="input"
+                  value={form.banner?.title ?? ""}
+                  onChange={(e) => setBanner({ title: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-sm text-ink/70 block mb-1">Texto</label>
+                <textarea
+                  className="input"
+                  value={form.banner?.text ?? ""}
+                  onChange={(e) => setBanner({ text: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-sm text-ink/70 block mb-1">Botón (CTA)</label>
+                <input
+                  className="input"
+                  value={form.banner?.cta ?? ""}
+                  onChange={(e) => setBanner({ cta: e.target.value })}
+                />
+              </div>
+            </section>
+
+            <section className="bg-blue-50/50 border border-blue-100 rounded-lg p-4 space-y-4">
+              <h2 className="font-serif text-lg text-ink mb-2">Contenido (EN) 🇺🇸</h2>
+              <div>
+                <label className="text-sm text-ink/70 block mb-1">Badge (EN)</label>
+                <input
+                  className="input"
+                  value={form.banner?.badge_en ?? ""}
+                  onChange={(e) => setBanner({ badge_en: e.target.value })}
+                  placeholder="New"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-ink/70 block mb-1">Title (EN)</label>
+                <input
+                  className="input"
+                  value={form.banner?.title_en ?? ""}
+                  onChange={(e) => setBanner({ title_en: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-sm text-ink/70 block mb-1">Text (EN)</label>
+                <textarea
+                  className="input"
+                  value={form.banner?.text_en ?? ""}
+                  onChange={(e) => setBanner({ text_en: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="text-sm text-ink/70 block mb-1">CTA Button (EN)</label>
+                <input
+                  className="input"
+                  value={form.banner?.cta_en ?? ""}
+                  onChange={(e) => setBanner({ cta_en: e.target.value })}
+                />
+              </div>
+            </section>
+
+            <section className="space-y-4">
+              <h2 className="font-serif text-lg text-ink mb-2">Enlace e imagen</h2>
+              <div>
+                <label className="text-sm text-ink/70 block mb-1">URL del botón</label>
+                <input
+                  className="input"
+                  value={form.banner?.link ?? ""}
+                  onChange={(e) => setBanner({ link: e.target.value })}
+                  placeholder="/templates"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-ink/70 block mb-1">Imagen (URL) - opcional</label>
+                <input
+                  className="input"
+                  value={form.banner?.image ?? ""}
+                  onChange={(e) => setBanner({ image: e.target.value })}
+                  placeholder="https://… o /api/thumb/lock/3"
+                />
+              </div>
+              <div>
+                <label className="text-sm text-ink/70 block mb-1">Imagen (EN) - opcional</label>
+                <input
+                  className="input"
+                  value={form.banner?.image_en ?? ""}
+                  onChange={(e) => setBanner({ image_en: e.target.value })}
+                />
+              </div>
+            </section>
+
+            <section className="border-t border-ink/10 pt-4">
+              <h2 className="text-sm text-ink/70 mb-3">Vista previa</h2>
+              <div className="space-y-2">
+                <p className="text-xs text-ink/50">Español</p>
+                <BannerPreview
+                  title={form.banner?.title}
+                  text={form.banner?.text}
+                  cta={form.banner?.cta}
+                  badge={form.banner?.badge}
+                  image={form.banner?.image}
+                  variant={form.banner?.variant}
+                />
+                <p className="text-xs text-ink/50 pt-2">English</p>
+                <BannerPreview
+                  title={form.banner?.title_en || form.banner?.title}
+                  text={form.banner?.text_en || form.banner?.text}
+                  cta={form.banner?.cta_en || form.banner?.cta}
+                  badge={form.banner?.badge_en || form.banner?.badge}
+                  image={form.banner?.image_en || form.banner?.image}
+                  variant={form.banner?.variant}
+                />
+              </div>
+            </section>
+          </>
+        )}
+
         {activeTab === "general" && (
           <>
             <section>
@@ -208,6 +468,28 @@ export default function AdminSiteSettings() {
                     value={form.heroImage ?? ""}
                     onChange={(e) => setForm({ ...form, heroImage: e.target.value })}
                   />
+                </div>
+                <div>
+                  <label className="text-sm text-ink/70 block mb-1">Fondo del hero (ES)</label>
+                  <input
+                    className="input"
+                    value={form.heroBackgroundImage ?? ""}
+                    onChange={(e) => setForm({ ...form, heroBackgroundImage: e.target.value })}
+                    placeholder="/api/thumb/lock/1"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-ink/70 block mb-1">Fondo del hero (EN)</label>
+                  <input
+                    className="input"
+                    value={form.heroBackgroundImage_en ?? ""}
+                    onChange={(e) => setForm({ ...form, heroBackgroundImage_en: e.target.value })}
+                    placeholder="/api/thumb/lock/1"
+                  />
+                  <p className="text-xs text-ink/50 mt-1">
+                    Se recomienda una ruta local (<code className="text-ink/70">/api/thumb/lock/N</code>)
+                    para no depender de servicios externos. Déjalo vacío para usar un fondo sólido.
+                  </p>
                 </div>
               </div>
             </section>
@@ -489,6 +771,77 @@ export default function AdminSiteSettings() {
       <button onClick={save} disabled={saving} className="btn-primary w-full sm:w-auto mt-4">
         {saving ? "Guardando…" : "Guardar cambios"}
       </button>
+    </div>
+  );
+}
+
+const PREVIEW_VARIANTS: Record<string, { wrap: string; badge: string; title: string; text: string; cta: string }> = {
+  gold: {
+    wrap: "bg-champagne border border-gold-500/25",
+    badge: "bg-gold-500 text-white",
+    title: "text-ink",
+    text: "text-ink/70",
+    cta: "btn-primary",
+  },
+  dark: {
+    wrap: "bg-ink text-cream",
+    badge: "bg-gold-500 text-ink",
+    title: "text-cream",
+    text: "text-cream/70",
+    cta: "btn-primary",
+  },
+  light: {
+    wrap: "bg-white border border-ink/10",
+    badge: "bg-ink text-cream",
+    title: "text-ink",
+    text: "text-ink/70",
+    cta: "btn-outline",
+  },
+  gradient: {
+    wrap: "bg-gradient-to-r from-ink via-ink/90 to-[#3d3226] text-cream",
+    badge: "bg-gold-500 text-ink",
+    title: "text-cream",
+    text: "text-cream/70",
+    cta: "btn-primary",
+  },
+};
+
+/** Réplica estática del PromoBanner para previsualizarlo sin salir del admin. */
+function BannerPreview({
+  title,
+  text,
+  cta,
+  badge,
+  image,
+  variant,
+}: {
+  title?: string;
+  text?: string;
+  cta?: string;
+  badge?: string;
+  image?: string;
+  variant?: string;
+}) {
+  const s = PREVIEW_VARIANTS[variant ?? "gold"] ?? PREVIEW_VARIANTS.gold;
+
+  if (!title && !text) {
+    return <p className="text-sm text-ink/40 italic">Sin contenido: el banner no se mostrará.</p>;
+  }
+
+  return (
+    <div className={`${s.wrap} rounded-lg px-5 py-6`}>
+      <div className="flex flex-col md:flex-row items-center gap-4 text-center md:text-left">
+        {image && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={image} alt="" className="w-full md:w-40 h-28 object-cover rounded-lg shrink-0" />
+        )}
+        <div className="flex-1">
+          {badge && <span className={`inline-block text-xs px-2 py-0.5 rounded-full mb-2 ${s.badge}`}>{badge}</span>}
+          {title && <p className={`font-serif text-lg ${s.title}`}>{title}</p>}
+          {text && <p className={`text-xs mt-1 ${s.text}`}>{text}</p>}
+        </div>
+        {cta && <span className={`${s.cta} text-xs shrink-0 pointer-events-none`}>{cta}</span>}
+      </div>
     </div>
   );
 }

@@ -354,6 +354,10 @@ export interface SiteSettings {
   heroCta: string;
   heroCta_en?: string;
   heroImage?: string;
+  // Fondo del hero, editable desde el admin. Si no se define, el hero usa
+  // el color sólido del tema.
+  heroBackgroundImage?: string;
+  heroBackgroundImage_en?: string;
   metaDescription: string;
   metaDescription_en?: string;
 
@@ -389,6 +393,19 @@ export interface SiteSettings {
 
   // Modo activo global (para UI)
   stripeTestMode?: boolean; // true = test, false = live
+
+  // Banner promocional ES/EN (inicio y/o planes)
+  banner?: PromoBanner;
+
+  // ---- Marketing / analítica (editables desde el admin) ----
+  // ID de Google Tag Manager, formato GTM-XXXXXXX.
+  gtmId?: string;
+  // ID numérico de Meta Pixel.
+  metaPixelId?: string;
+  // HTML libre inyectado en <head> y antes de </body>. Solo admins pueden
+  // escribir /site/config. No pegar aquí claves ni secretos.
+  customHeadScripts?: string;
+  customBodyScripts?: string;
 }
 
 // ----------------------------- Config del asistente IA -----------------------
@@ -447,6 +464,48 @@ export type AiSettingsPublic = Omit<AiSettings, "apiKey"> & {
   apiKeyMasked: string;
   hasApiKey: boolean;
   apiKeyFromEnv: boolean;
+};
+
+// ----------------------------- Banner promocional -----------------------------
+// Banner ES/EN editable desde el admin. Se muestra en el inicio y/o en planes.
+export type BannerVariant = "gold" | "dark" | "light" | "gradient";
+export type BannerPages = "home" | "pricing" | "both";
+
+export interface PromoBanner {
+  enabled: boolean;
+  // En qué páginas se muestra
+  pages: BannerPages;
+
+  // Contenido (ES por defecto, _en para inglés)
+  title: string;
+  title_en?: string;
+  text: string;
+  text_en?: string;
+  cta: string;
+  cta_en?: string;
+  link: string;
+  badge?: string;
+  badge_en?: string;
+
+  // Apariencia
+  variant: BannerVariant;
+  image?: string;
+  image_en?: string;
+}
+
+export const DEFAULT_BANNER: PromoBanner = {
+  enabled: false,
+  pages: "both",
+  title: "Crea tu invitación con IA",
+  title_en: "Create your invitation with AI",
+  text: "Describe tu evento y el asistente arma el diseño por ti.",
+  text_en: "Describe your event and the assistant builds the design for you.",
+  cta: "Probar el asistente",
+  cta_en: "Try the assistant",
+  link: "/templates",
+  badge: "Nuevo",
+  badge_en: "New",
+  variant: "gold",
 };
 
 // ----------------------------- Páginas CMS -----------------------------------

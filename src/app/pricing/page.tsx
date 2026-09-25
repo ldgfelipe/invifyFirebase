@@ -6,7 +6,9 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { serverDb } from "@/lib/firebase/serverClient";
+import { getSiteSettings } from "@/lib/site";
 import type { Plan } from "@/lib/types";
+import { PromoBanner } from "@/components/PromoBanner";
 import { PricingFlow } from "@/components/pricing/PricingFlow";
 
 export const revalidate = 300;
@@ -25,10 +27,14 @@ export default async function PricingPage({
 }) {
   const snap = await getDocs(query(collection(serverDb, "plans"), orderBy("price", "asc")));
   const plans = snap.docs.map((d) => d.data() as Plan);
+  const settings = await getSiteSettings();
 
   return (
-    <Suspense fallback={<div className="text-center py-20 text-ink/60">Cargando…</div>}>
-      <PricingFlow plans={plans} templateId={searchParams.template} />
-    </Suspense>
+    <>
+      <PromoBanner banner={settings.banner} page="pricing" />
+      <Suspense fallback={<div className="text-center py-20 text-ink/60">Cargando…</div>}>
+        <PricingFlow plans={plans} templateId={searchParams.template} />
+      </Suspense>
+    </>
   );
 }
