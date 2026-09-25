@@ -1,13 +1,17 @@
 // ============================================================================
 // API /api/admin/ai-config/test
 // POST → hace una llamada mínima al proveedor configurado para verificar que la
-// credencial y el modelo responden. Guarda el resultado en la config para que el
-// panel muestre el último estado. Requiere rol admin.
+// credencial, la base y el modelo responden. Habla el formato que corresponda
+// (OpenAI-compatible o Gemini) a través del cliente común. Guarda el resultado
+// en la config para que el panel muestre el último estado. Requiere rol admin.
 // ============================================================================
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
-import { getAiSettings, extractJson, AI_DEFAULT_BASE_URL, AI_DEFAULT_MODEL } from "@/lib/ai/config";
-import type { AiTestResult } from "@/lib/types";
+import { getAiSettings } from "@/lib/ai/config";
+import { extractJson } from "@/lib/ai/client";
+import { isUsableBaseUrl, resolveProvider } from "@/lib/ai/providers";
+import { normalizeAiSettings } from "@/lib/ai/config";
+import type { AiSettings, AiTestResult } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -42,71 +46,66 @@ export async function POST(req: NextRequest) {
   }
 
   const settings = await getAiSettings();
+  const provider = typeof body.provider === "string" ? body.provider : settings.provider;
+  const preset = resolveProvider(provider);
+
+  // Base y modelo propuestos por el preset, para poder probar un proveedor nuevo
+  // sin escribir antes los valores a mano.
   const baseUrl =
-    typeof body.baseUrl === "string" && body.baseUrl.trim()
-      ? body.baseUrl.trim().replace(/\/+$/, "")
-      : settings.baseUrl || AI_DEFAULT_BASE_URL;
+    (typeof body.baseUrl === "string" && body.baseUrl.trim() ? body.baseUrl.trim() : settings.baseUrl) ||
+    preset.baseUrl;
   const model =
-    (typeof body.model === "string" && body.model.trim()) || settings.model || AI_DEFAULT_MODEL;
+    (typeof body.model === "string" && body.model.trim()) || settings.model || preset.defaultModel;
   const apiKey =
     typeof body.apiKey === "string" && body.apiKey.trim() && !body.apiKey.includes("•")
       ? body.apiKey.trim()
       : settings.apiKey;
 
-  if (!apiKey) {
+  const candidate = normalizeAiSettings(
+    { ...settings, provider: preset.id, baseUrl, model, apiKey },
+    settings
+  ) as AiSettings;
+
+  if (!isUsableBaseUrl(candidate.baseUrl)) {
     return NextResponse.json(
-      { error: "No hay API key. Escribe una o guárdala antes de probar." },
+      { error: `Base URL inválida. Debe empezar por http:// o https:// y no dejar {account_id} sin reemplazar.` },
       { status: 400 }
     );
   }
+  if (!apiKey && preset.requiresKey) {
+    return NextResponse.json(
+      { error: `Falta la API key de ${preset.label}. Escribe una o guárdala antes de probar.` },
+      { status: 400 }
+    );
+  }
+  if (!model) {
+    return NextResponse.json({ error: `Falta el modelo para ${preset.label}.` }, { status: 400 });
+  }
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25_000);
   const startedAt = Date.now();
   let result: AiTestResult;
 
   try {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0,
-        max_tokens: 60,
-        response_format: { type: "json_object" },
-        messages: [{ role: "user", content: TEST_PROMPT }],
-      }),
-    });
+    // Import diferido: el cliente arrastra dependencias de red y no hace falta
+    // para responder los errores de validación de arriba.
+    const { chatCompletion } = await import("@/lib/ai/client");
 
-    const latencyMs = Date.now() - startedAt;
+    const { raw, latencyMs } = await chatCompletion(
+      candidate,
+      [{ role: "user", content: TEST_PROMPT }],
+      { timeoutMs: 25_000, forceJson: true }
+    );
 
-    if (!res.ok) {
-      const detail = await res.text().catch(() => "");
-      result = {
-        ok: false,
-        model,
-        latencyMs,
-        at: Date.now(),
-        message: `HTTP ${res.status} ${res.statusText}${detail ? ` — ${detail.slice(0, 300)}` : ""}`,
-      };
-    } else {
-      const data: any = await res.json();
-      const raw: string = data?.choices?.[0]?.message?.content ?? "";
-      const json = extractJson(raw);
-      result = json?.ok
-        ? { ok: true, model, latencyMs, at: Date.now(), message: "Conexión correcta." }
-        : {
-            ok: false,
-            model,
-            latencyMs,
-            at: Date.now(),
-            message: `El proveedor respondió pero sin JSON válido: ${raw.slice(0, 160) || "(vacío)"}`,
-          };
-    }
+    const json = extractJson(raw);
+    result = json?.ok
+      ? { ok: true, model, latencyMs, at: Date.now(), message: `Conexión correcta con ${preset.label}.` }
+      : {
+          ok: false,
+          model,
+          latencyMs,
+          at: Date.now(),
+          message: `El proveedor respondió pero sin JSON válido: ${raw.slice(0, 160) || "(vacío)"}`,
+        };
   } catch (err: any) {
     result = {
       ok: false,
@@ -116,10 +115,8 @@ export async function POST(req: NextRequest) {
       message:
         err?.name === "AbortError"
           ? "Timeout: el proveedor tardó más de 25 s."
-          : `Error de red: ${err?.message ?? "desconocido"}`,
+          : `Error: ${err?.message ?? "desconocido"}`,
     };
-  } finally {
-    clearTimeout(timer);
   }
 
   // Persiste el resultado del test (no la clave).

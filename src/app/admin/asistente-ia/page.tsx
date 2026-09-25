@@ -10,8 +10,9 @@
 // La apiKey nunca se devuelve en claro: el GET la enmascara y el PUT solo la
 // reemplaza si el admin escribe un valor nuevo.
 // ============================================================================
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { PROVIDERS, resolveProvider } from "@/lib/ai/providers";
 import type { AiSettingsPublic } from "@/lib/types";
 
 type Tab = "conexion" | "comportamiento" | "prompts" | "imagenes";
@@ -50,6 +51,16 @@ const TABS: { id: Tab; label: string }[] = [
 
 const MODEL_SUGGESTIONS = ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1", "gpt-3.5-turbo"];
 
+/** Agrupa el catálogo por familia para que el selector no sea una lista plana. */
+const PROVIDER_GROUPS: [string, typeof PROVIDERS][] = (() => {
+  const map = new Map<string, typeof PROVIDERS>();
+  for (const p of PROVIDERS) {
+    const list = map.get(p.group) ?? [];
+    map.set(p.group, [...list, p]);
+  }
+  return [...map.entries()];
+})();
+
 export default function AdminAiSettingsPage() {
   const { user } = useAuth();
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -58,6 +69,63 @@ export default function AdminAiSettingsPage() {
   const [tab, setTab] = useState<Tab>("conexion");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [remoteModels, setRemoteModels] = useState<string[]>([]);
+  const [modelMsg, setModelMsg] = useState<string | null>(null);
+  const [baseUrlEdited, setBaseUrlEdited] = useState(false);
+
+  const preset = useMemo(() => resolveProvider(form.provider), [form.provider]);
+
+  const keyPlaceholder =
+    preset?.id === "gemini"
+      ? "AIza… (Google AI Studio)"
+      : preset?.id === "cloudflare"
+        ? "Token de cuenta de Cloudflare"
+        : "sk-… / gsk_… / xai-…";
+
+  /**
+   * Cambiar de proveedor arrastra su base y su modelo por defecto, salvo que el
+   * admin ya haya escrito una base a mano: en ese caso se respeta su URL para no
+   * borrar un proxy configurado a propósito.
+   */
+  function selectProvider(id: FormState["provider"]) {
+    const next = resolveProvider(id);
+    setForm((f) => ({
+      ...f,
+      provider: next.id,
+      baseUrl: baseUrlEdited && next.baseUrl === "" ? f.baseUrl : next.baseUrl,
+      model: next.defaultModel || f.model,
+    }));
+    setRemoteModels([]);
+    setModelMsg(null);
+  }
+
+  /** Pregunta al proveedor qué modelos permite esta clave. */
+  async function loadModels() {
+    setLoadingModels(true);
+    setModelMsg(null);
+    setErr(null);
+    try {
+      const res = await fetch("/api/admin/ai-config/models", {
+        method: "POST",
+        headers: await authHeaders(),
+        body: JSON.stringify({
+          provider: form.provider,
+          baseUrl: form.baseUrl,
+          apiKey: form.apiKey,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "No se pudieron cargar los modelos");
+      setRemoteModels(data.models ?? []);
+      setModelMsg(data.message ?? null);
+    } catch (e: any) {
+      setErr(e.message);
+      setModelMsg(null);
+    } finally {
+      setLoadingModels(false);
+    }
+  }
   const [testing, setTesting] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -153,6 +221,7 @@ export default function AdminAiSettingsPage() {
         method: "POST",
         headers: await authHeaders(),
         body: JSON.stringify({
+          provider: form.provider,
           apiKey: form.apiKey,
           baseUrl: form.baseUrl,
           model: form.model,
@@ -241,26 +310,58 @@ export default function AdminAiSettingsPage() {
                 <select
                   className="input"
                   value={form.provider}
-                  onChange={(e) => set("provider", e.target.value as FormState["provider"])}
+                  onChange={(e) => selectProvider(e.target.value as FormState["provider"])}
                 >
-                  <option value="openai">OpenAI</option>
-                  <option value="openai-compatible">Compatible con OpenAI (proxy / self-hosted)</option>
+                  {PROVIDER_GROUPS.map(([group, items]) => (
+                    <optgroup key={group} label={group}>
+                      {items.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
+                {preset && (
+                  <p className="text-xs text-ink/50 mt-1">
+                    Formato de API:{" "}
+                    <code className="text-ink/70">{preset.wire === "gemini" ? "Gemini (generateContent)" : "OpenAI-compatible (chat/completions)"}</code>
+                    {preset.requiresKey ? "" : " · no requiere API key"}
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-sm text-ink/70 block mb-1">Modelo</label>
-                <input
-                  className="input"
-                  list="ai-model-suggestions"
-                  value={form.model}
-                  onChange={(e) => set("model", e.target.value)}
-                  placeholder="gpt-4o-mini"
-                />
+                <div className="flex gap-2">
+                  <input
+                    className="input"
+                    list="ai-model-suggestions"
+                    value={form.model}
+                    onChange={(e) => set("model", e.target.value)}
+                    placeholder={preset?.defaultModel || "gpt-4o-mini"}
+                  />
+                  {preset?.canListModels && (
+                    <button
+                      type="button"
+                      onClick={loadModels}
+                      disabled={loadingModels}
+                      className="shrink-0 px-3 py-2 text-sm font-medium rounded-lg border border-ink/15 text-ink/70 hover:bg-cream disabled:opacity-50 whitespace-nowrap"
+                      title="Preguntar al proveedor qué modelos permite esta clave"
+                    >
+                      {loadingModels ? "Cargando…" : "Ver modelos"}
+                    </button>
+                  )}
+                </div>
                 <datalist id="ai-model-suggestions">
-                  {MODEL_SUGGESTIONS.map((m) => (
+                  {(remoteModels.length ? remoteModels : (preset?.models ?? MODEL_SUGGESTIONS)).map((m) => (
                     <option key={m} value={m} />
                   ))}
                 </datalist>
+                {modelMsg && (
+                  <p className="text-xs text-ink/50 mt-1">
+                    {remoteModels.length ? `${modelMsg} ·` : modelMsg}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -269,13 +370,34 @@ export default function AdminAiSettingsPage() {
               <input
                 className="input"
                 value={form.baseUrl}
-                onChange={(e) => set("baseUrl", e.target.value)}
-                placeholder="https://api.openai.com/v1"
+                onChange={(e) => {
+                  set("baseUrl", e.target.value);
+                  setBaseUrlEdited(true);
+                }}
+                placeholder={preset?.baseUrl || "https://api.openai.com/v1"}
               />
               <p className="text-xs text-ink/50 mt-1">
-                Debe incluir <code className="text-ink/70">/v1</code>. Para OpenAI:{" "}
-                <code className="text-ink/70">https://api.openai.com/v1</code>
+                {preset?.wire === "gemini"
+                  ? "Base de Google AI Studio, hasta /v1beta. No se le añade /chat/completions."
+                  : "Debe incluir /v1. Ejemplo: https://api.openai.com/v1"}
+                {baseUrlEdited && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      set("baseUrl", preset?.baseUrl ?? "");
+                      setBaseUrlEdited(false);
+                    }}
+                    className="ml-2 underline hover:text-ink/80"
+                  >
+                    Restaurar la del proveedor
+                  </button>
+                )}
               </p>
+              {preset?.note && (
+                <p className="text-xs text-amber-700/90 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2">
+                  {preset.note}
+                </p>
+              )}
             </div>
 
             <div>
@@ -286,16 +408,16 @@ export default function AdminAiSettingsPage() {
                 autoComplete="off"
                 value={form.apiKey}
                 onChange={(e) => set("apiKey", e.target.value)}
-                placeholder={
-                  form.hasApiKey ? form.apiKeyMasked : "sk-… / sk-proj-…"
-                }
+                placeholder={form.hasApiKey ? form.apiKeyMasked : keyPlaceholder}
               />
               <p className="text-xs text-ink/50 mt-1">
                 {form.apiKeyFromEnv
-                  ? "La clave actual viene de una variable de entorno (OPENAI_API_KEY). Escríbela aquí para sobrescribirla."
+                  ? "La clave actual viene de una variable de entorno (AI_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY…). Escríbela aquí para sobrescribirla."
                   : form.hasApiKey
                     ? `Clave guardada: ${form.apiKeyMasked}. Déjala vacía para conservarla.`
-                    : "No hay clave guardada. La IA no podrá ejecutarse hasta que la configures."}
+                    : preset?.requiresKey
+                      ? `No hay clave guardada para ${preset.label}. La IA no podrá ejecutarse hasta que la configures.`
+                      : `${preset?.label} no necesita clave. Este campo se ignora.`}
               </p>
             </div>
 

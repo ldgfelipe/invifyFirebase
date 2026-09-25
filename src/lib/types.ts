@@ -412,7 +412,35 @@ export interface SiteSettings {
 // Documento /aiConfig/global. Se guarda FUERA de /site/config a propósito:
 // la colección /site es legible por cualquier visitante, mientras que
 // /aiConfig solo la leen y escriben el Admin SDK y los usuarios con rol admin.
-export type AiProvider = "openai" | "openai-compatible";
+/**
+ * Proveedores de IA soportados. Casi todos hablan el protocolo OpenAI
+ * (POST {baseUrl}/chat/completions); Gemini usa su propio formato, y por eso
+ * va aparte. "custom" cubre proxies y self-hosted arbitrarios.
+ * Catálogo y valores por defecto: src/lib/ai/providers.ts
+ */
+export type AiProvider =
+  // OpenAI-compatible
+  | "openai"
+  | "openrouter"
+  | "groq"
+  | "xai"
+  | "deepseek"
+  | "mistral"
+  | "together"
+  | "siliconflow"
+  | "fireworks"
+  | "cerebras"
+  | "perplexity"
+  | "nvidia"
+  | "novita"
+  | "hyperbolic"
+  | "cloudflare"
+  | "ollama"
+  | "lmstudio"
+  | "llamacpp"
+  | "custom"
+  // Formato nativo
+  | "gemini";
 export type AiLanguageMode = "auto" | "es" | "en";
 export type AiImageSource = "local" | "picsum";
 

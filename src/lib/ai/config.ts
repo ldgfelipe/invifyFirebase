@@ -1,16 +1,21 @@
-// ============================================================================
-// AI - Configuración del asistente.
-// Prioridad: /aiConfig/global (Firestore, vía Admin SDK) > env vars.
-// Este módulo SOLO corre en servidor: es el único lugar donde la apiKey se
-// lee en claro. El cliente recibe siempre una versión enmascarada.
+﻿// ============================================================================
+// AI - ConfiguraciÃ³n del asistente.
+// Prioridad: /aiConfig/global (Firestore, vÃ­a Admin SDK) > env vars.
+// Este mÃ³dulo SOLO corre en servidor: es el Ãºnico lugar donde la apiKey se
+// lee en claro. El cliente recibe siempre una versiÃ³n enmascarada.
 // ============================================================================
 import { adminDb } from "@/lib/firebase/admin";
 import type { AiSettings, AiSettingsPublic } from "@/lib/types";
+import { isKnownProvider, resolveProvider } from "./providers";
+import { chatCompletion, isProviderReady, type ChatMessage } from "./client";
 
 const DOC_PATH = { collection: "aiConfig", docId: "global" } as const;
 
-export const AI_DEFAULT_BASE_URL = "https://api.openai.com/v1";
-export const AI_DEFAULT_MODEL = "gpt-4o-mini";
+/** Reexportados para no romper los imports existentes. */
+export { extractJson, isProviderReady } from "./client";
+export { AI_DEFAULT_BASE_URL, AI_DEFAULT_MODEL } from "./constants";
+
+import { AI_DEFAULT_BASE_URL, AI_DEFAULT_MODEL } from "./constants";
 
 export const DEFAULT_AI_SETTINGS: AiSettings = {
   enabled: false,
@@ -21,13 +26,13 @@ export const DEFAULT_AI_SETTINGS: AiSettings = {
   temperature: 0.6,
   maxTokens: 2000,
   systemPrompt:
-    "Eres un diseñador web experto en invitaciones digitales. " +
-    "Creas plantillas elegantes, modernas y coherentes con la combinación de color solicitada, " +
+    "Eres un diseÃ±ador web experto en invitaciones digitales. " +
+    "Creas plantillas elegantes, modernas y coherentes con la combinaciÃ³n de color solicitada, " +
     "respetando siempre la estructura JSON indicada.",
   customInstructions:
-    "- Prioriza legibilidad y jerarquía visual.\n" +
+    "- Prioriza legibilidad y jerarquÃ­a visual.\n" +
     "- Usa textos breves y emotivos, nunca lorem ipsum.\n" +
-    "- Mantén la paleta dentro de los colores indicados en theme.",
+    "- MantÃ©n la paleta dentro de los colores indicados en theme.",
   languageMode: "auto",
   fallbackToMock: true,
   imageSource: "local",
@@ -48,10 +53,10 @@ const str = (v: unknown, fallback: string): string =>
 const bool = (v: unknown, fallback: boolean): boolean =>
   typeof v === "boolean" ? v : fallback;
 
-/** Normaliza cualquier objeto (Firestore o request) a un AiSettings válido. */
+/** Normaliza cualquier objeto (Firestore o request) a un AiSettings vÃ¡lido. */
 export function normalizeAiSettings(raw: unknown, base: AiSettings = DEFAULT_AI_SETTINGS): AiSettings {
   const r = (raw ?? {}) as Record<string, unknown>;
-  const provider = r.provider === "openai-compatible" ? "openai-compatible" : "openai";
+  const provider = isKnownProvider(r.provider) ? r.provider : base.provider;
   const languageMode =
     r.languageMode === "es" || r.languageMode === "en" ? r.languageMode : "auto";
   const imageSource = r.imageSource === "picsum" ? "picsum" : "local";
@@ -80,9 +85,27 @@ export function normalizeAiSettings(raw: unknown, base: AiSettings = DEFAULT_AI_
 }
 
 function fromEnv(): Partial<AiSettings> {
-  const apiKey = process.env.OPENAI_API_KEY || process.env.AI_API_KEY || "";
+  const apiKey =
+    process.env.AI_API_KEY ||
+    process.env.OPENAI_API_KEY ||
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.GROQ_API_KEY ||
+    "";
   if (!apiKey) return {};
-  return { apiKey, model: process.env.AI_MODEL || AI_DEFAULT_MODEL };
+
+  // Permite desplegar preconfigurado sin pasar por el panel. El proveedor fija
+  // la baseUrl y el modelo por defecto solo si no vienen dados.
+  const preset = isKnownProvider(process.env.AI_PROVIDER)
+    ? resolveProvider(process.env.AI_PROVIDER)
+    : null;
+
+  return {
+    apiKey,
+    model: process.env.AI_MODEL || preset?.defaultModel || AI_DEFAULT_MODEL,
+    baseUrl: process.env.AI_BASE_URL || preset?.baseUrl || AI_DEFAULT_BASE_URL,
+    ...(preset ? { provider: preset.id } : {}),
+  };
 }
 
 /** Lee el documento crudo de Firestore, sin aplicar el fallback del entorno. */
@@ -110,8 +133,8 @@ export async function getAiSettings(): Promise<AiSettings> {
 
 /**
  * Indica si la apiKey proviene de una variable de entorno (no editable en el
- * panel). Debe leer el documento crudo: getAiSettings() ya resolvió el fallback
- * del entorno, así que consultarla devolvería siempre false.
+ * panel). Debe leer el documento crudo: getAiSettings() ya resolviÃ³ el fallback
+ * del entorno, asÃ­ que consultarla devolverÃ­a siempre false.
  */
 export async function isApiKeyFromEnv(): Promise<boolean> {
   const envKey = process.env.OPENAI_API_KEY || process.env.AI_API_KEY || "";
@@ -123,11 +146,11 @@ export async function isApiKeyFromEnv(): Promise<boolean> {
 /** Enmascara la clave para poder mostrarla sin exponerla. */
 export function maskApiKey(key: string): string {
   if (!key) return "";
-  if (key.length <= 11) return "•".repeat(key.length);
-  return `${key.slice(0, 6)}${"•".repeat(8)}${key.slice(-4)}`;
+  if (key.length <= 11) return "â€¢".repeat(key.length);
+  return `${key.slice(0, 6)}${"â€¢".repeat(8)}${key.slice(-4)}`;
 }
 
-/** Proyecta la config a la vista pública (sin la clave en claro). */
+/** Proyecta la config a la vista pÃºblica (sin la clave en claro). */
 export function toPublicSettings(
   settings: AiSettings,
   opts: { apiKeyFromEnv?: boolean } = {}
@@ -160,67 +183,15 @@ export async function saveAiSettings(
 }
 
 /**
- * Llama al proveedor configurado. Devuelve null si la IA está apagada,
- * no hay credencial, o si la respuesta no trae JSON válido.
+ * Llama al proveedor configurado (OpenAI-compatible o Gemini).
+ * Devuelve null si la IA está apagada, falta la credencial o la URL base;
+ * en ese caso el wizard cae al mock determinista.
  */
 export async function callAi(
   settings: AiSettings,
-  messages: { role: "system" | "user"; content: string }[]
+  messages: ChatMessage[]
 ): Promise<{ json: any; raw: string; latencyMs: number } | null> {
-  if (!settings.enabled || !settings.apiKey) return null;
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60_000);
-  const startedAt = Date.now();
-
-  try {
-    const res = await fetch(`${settings.baseUrl}/chat/completions`, {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${settings.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: settings.model,
-        temperature: settings.temperature,
-        max_tokens: settings.maxTokens,
-        response_format: { type: "json_object" },
-        messages,
-      }),
-    });
-
-    if (!res.ok) {
-      const detail = await res.text().catch(() => "");
-      throw new Error(`HTTP ${res.status} ${res.statusText}${detail ? ` — ${detail.slice(0, 300)}` : ""}`);
-    }
-
-    const data: any = await res.json();
-    const raw: string = data?.choices?.[0]?.message?.content ?? "";
-    const json = extractJson(raw);
-    return { json, raw, latencyMs: Date.now() - startedAt };
-  } finally {
-    clearTimeout(timer);
-  }
+  if (!isProviderReady(settings)) return null;
+  return chatCompletion(settings, messages);
 }
 
-/** Extrae el primer objeto JSON balanceado de un texto. */
-export function extractJson(content: string): any | null {
-  const start = content.indexOf("{");
-  if (start === -1) return null;
-  let depth = 0;
-  for (let i = start; i < content.length; i++) {
-    if (content[i] === "{") depth++;
-    else if (content[i] === "}") {
-      depth--;
-      if (depth === 0) {
-        try {
-          return JSON.parse(content.slice(start, i + 1));
-        } catch {
-          return null;
-        }
-      }
-    }
-  }
-  return null;
-}

@@ -8,7 +8,7 @@
 // ============================================================================
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
-import { callAi, getAiSettings } from "@/lib/ai/config";
+import { callAi, getAiSettings, isProviderReady } from "@/lib/ai/config";
 import {
   buildAIPrompt,
   buildMockTemplate,
@@ -26,9 +26,9 @@ import {
 export const runtime = "nodejs";
 
 /**
- * Cuenta las generaciones reales de hoy. El límite solo aplica a llamadas
- * pagadas a la IA: cuando el asistente está apagado o cae al mock, generar es
- * gratis y no debe bloquearse. 0 = sin límite.
+ * Cuenta las generaciones reales de hoy, para respetar el tope que fijó el
+ * admin. Solo aplica cuando se va a llamar a la IA: con el asistente apagado o
+ * en fallback mock, generar es gratis y no debe bloquearse. 0 = sin límite.
  */
 async function overDailyLimit(limit: number): Promise<{ used: number; limit: number } | null> {
   if (limit <= 0) return null;
@@ -51,7 +51,9 @@ async function overDailyLimit(limit: number): Promise<{ used: number; limit: num
 
 export async function POST(req: NextRequest) {
   const settings = await getAiSettings();
-  const willCallAi = Boolean(settings.enabled && settings.apiKey);
+  // isProviderReady valida provider + base + modelo + credencial según el
+  // preset, de modo que un servidor local sin clave también funciona.
+  const willCallAi = isProviderReady(settings);
 
   if (willCallAi) {
     const capped = await overDailyLimit(settings.maxGenerationsPerDay);
