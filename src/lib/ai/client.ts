@@ -47,6 +47,24 @@ export function isProviderReady(settings: AiSettings): boolean {
 
 const truncate = (s: string, n = 300) => s.slice(0, n);
 
+/**
+ * Detecta una Base URL que ya trae el endpoint puesto (…/v1/responses,
+ * …/v1/models, …/chat/completions). Invify siempre añade el endpoint, así que
+ * el resultado sería un 404 del proveedor del tipo "No handler found on route",
+ * que no dice nada útil. Es un error de tecleo fácil de cometer.
+ */
+const ENDPOINT_SUFFIX =
+  /\/(chat\/completions|completions|responses|messages|embeddings|models|generateContent)$/i;
+
+export function baseUrlLooksComplete(baseUrl: string): string | null {
+  try {
+    const { pathname } = new URL(baseUrl);
+    return pathname.match(ENDPOINT_SUFFIX)?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function readError(res: Response): Promise<string> {
   const detail = await res.text().catch(() => "");
   return `HTTP ${res.status} ${res.statusText}${detail ? ` — ${truncate(detail)}` : ""}`;
@@ -176,12 +194,23 @@ export async function chatCompletion(
   const { timeoutMs = 60_000, forceJson = true } = opts;
   const preset = resolveProvider(settings.provider);
 
-  if (!isUsableBaseUrl(settings.baseUrl)) {
+    if (!isUsableBaseUrl(settings.baseUrl)) {
     throw new Error(
       `Base URL inválida para ${preset.label}. Debe empezar por http:// o https://` +
         (settings.baseUrl.includes("{") ? " y no dejar placeholders como {account_id} sin reemplazar." : ".")
     );
   }
+
+  const alreadyComplete = baseUrlLooksComplete(settings.baseUrl);
+  if (alreadyComplete) {
+    const base = settings.baseUrl.replace(/\/[^/]+$/, "");
+    throw new Error(
+      `La Base URL ya incluye el endpoint "${alreadyComplete}". ` +
+        `Escribe solo la base: ${base || "(vacía)"}. El endpoint lo añade Invify por ti.`
+    );
+  }
+
+
   if (!settings.apiKey && preset.requiresKey) {
     throw new Error(`Falta la API key de ${preset.label}.`);
   }

@@ -51,6 +51,9 @@ const TABS: { id: Tab; label: string }[] = [
 
 const MODEL_SUGGESTIONS = ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1", "gpt-3.5-turbo"];
 
+/** Quita el último segmento de una URL, para sugerir la base sin el endpoint. */
+const stripLastSegment = (url: string) => url.replace(/\/[^/]+$/, "");
+
 /** Agrupa el catálogo por familia para que el selector no sea una lista plana. */
 const PROVIDER_GROUPS: [string, typeof PROVIDERS][] = (() => {
   const map = new Map<string, typeof PROVIDERS>();
@@ -75,6 +78,17 @@ export default function AdminAiSettingsPage() {
   const [baseUrlEdited, setBaseUrlEdited] = useState(false);
 
   const preset = useMemo(() => resolveProvider(form.provider), [form.provider]);
+
+  // Aviso previo a guardar: una URL con el endpoint puesto produce un 404 opaco.
+  const baseUrlProblem = useMemo(() => {
+    try {
+      return new URL(form.baseUrl).pathname.match(
+        /\/(chat\/completions|completions|responses|messages|embeddings|models|generateContent)$/i
+      )?.[1];
+    } catch {
+      return null;
+    }
+  }, [form.baseUrl]);
 
   const keyPlaceholder =
     preset?.id === "gemini"
@@ -393,6 +407,15 @@ export default function AdminAiSettingsPage() {
                   </button>
                 )}
               </p>
+              {baseUrlProblem && (
+                <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1.5 mt-2">
+                  Esa URL ya termina en <code className="font-semibold">{baseUrlProblem}</code>, o sea
+                  que incluye el endpoint. Invify lo añade solo, así que la petición saldría a{" "}
+                  <code className="font-semibold">{form.baseUrl}/chat/completions</code> y el proveedor
+                  respondería 404. Escribe solo la base:{" "}
+                  <code className="font-semibold">{stripLastSegment(form.baseUrl)}</code>
+                </p>
+              )}
               {preset?.note && (
                 <p className="text-xs text-amber-700/90 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2">
                   {preset.note}
