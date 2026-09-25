@@ -63,33 +63,48 @@ export function siteConfig() {
     heroSubtitle_en: "Editorial design, intentional typography and flawless mobile experience. Choose, customize and share in 3 clicks.",
     heroCta: "Explorar catálogo profesional",
     heroCta_en: "Browse professional catalog",
+    // Nuevas imágenes hero para modo English/local
+    heroBackgroundImage: "/api/thumb/lock/1", // Imagen principal hero (SVG local)
+    heroBackgroundImage_en: "/api/thumb/lock/1", // Hero image for English mode
+    // Catálogo por defecto: imágenes asociadas a cada categoría para evitar loremflickr
+    defaultTemplateImages: {
+      boda: "/api/thumb/lock/1",        // Bodas - clásica
+      cumpleanos: "/api/thumb/lock/2",  // Cumpleaños - arcoíris
+      babyshower: "/api/thumb/lock/3",  // Babyshower - nubes
+      Bautizo: "/api/thumb/lock/4",     // Bautizo - ángel
+      corporativo: "/api/thumb/lock/5", // Corporativo - tech
+      // fallback general
+      fallback: "/api/thumb/lock/1"
+    },
     metaDescription: "Invify - 30 plantillas profesionales para bodas, cumpleaños, baby shower, bautizos y corporativo. Diseño editorial con RSVP, quiz y música.",
     metaDescription_en: "Invify - 30 professional templates for weddings, birthdays, baby showers, baptisms and corporate. Editorial design with RSVP, quiz and music.",
+    // Métricas y conversión
     updatedAt: Date.now(),
   };
 }
 
-function baseBuilder({ primaryColor, background, fontFamily = "serif", backgroundImage, backgroundOverlay, textColor, modules }) {
+function baseBuilder({ primaryColor, background, fontFamily = "serif", backgroundImage, backgroundOverlay, textColor, modules, defaultImage }) {
   const theme = { primaryColor, background, fontFamily };
   if (backgroundImage) theme.backgroundImage = backgroundImage;
+  else if (defaultImage) theme.backgroundImage = defaultImage;
   if (backgroundOverlay) theme.backgroundOverlay = backgroundOverlay;
   if (textColor) theme.textColor = textColor;
   return { theme, modules };
 }
 
-// Catálogo profesional: tipografía y paleta con intención
-export const TEMPLATES = [
+// Catálogo profesional: tipografía y paleta con intención.
+// Los objetos declaran su propio `id`; el thumbnail/preview se inyecta abajo
+// con ese id para que la URL siempre apunte a la plantilla correcta.
+const RAW_TEMPLATES = [
   // ==================== BODA - 6 profesionales ====================
   {
     id: "boda-editorial-classic",
     name: "Boda Editorial Clásica",
     category: "boda",
-    thumbnailUrl: "/api/thumb/"+id,
-    previewUrl: "/api/thumb/"+id,
     active: true,
     createdAt: Date.now(),
     builderConfig: baseBuilder({
-      primaryColor: "#8B6A2B", background: "#FFFBF2", fontFamily: "serif",
+      primaryColor: "#8B6A2B", background: "#FFFBF2", fontFamily: "serif", defaultImage: "/api/thumb/lock/1",
       modules: [
         { id: "pre", type: "preloader", visible: true, text: "A & L", imageUrl: "/api/thumb/lock/101" },
         { id: "hdr", type: "header", visible: true, title: "Nos casamos", names: "Ana & Luis — 14.11.2026", date: "2026-11-14T16:00:00", subtitle: "Ceremonia íntima, celebración eterna", imageUrl: "/api/thumb/lock/2", style: { backgroundImage: "/api/thumb/lock/2", backgroundOverlay: "rgba(255,251,242,0.72)", textColor: "#2C2C2C", padding: "56px 20px", borderRadius: "20px" } },
@@ -108,12 +123,10 @@ export const TEMPLATES = [
     id: "boda-minimal-moderna",
     name: "Boda Minimal Moderna",
     category: "boda",
-    thumbnailUrl: "/api/thumb/"+id,
-    previewUrl: "/api/thumb/"+id,
     active: true,
     createdAt: Date.now() + 1,
     builderConfig: baseBuilder({
-      primaryColor: "#111111", background: "#F7F7F7", fontFamily: "sans", textColor: "#111111",
+      primaryColor: "#111111", background: "#F7F7F7", fontFamily: "sans", defaultImage: "/api/thumb/lock/1", textColor: "#111111",
       modules: [
         { id: "hdr", type: "header", visible: true, title: "M & J", names: "María & Jorge", date: "2026-09-20T18:00:00", subtitle: "Menos es más", imageUrl: "/api/thumb/lock/6", style: { background: "#FFFFFF", textColor: "#111111", padding: "40px 20px", borderRadius: "0px", border: "1px solid #E5E5E5" } },
         { id: "cd", type: "countdown", visible: true, targetDate: "2026-09-20T18:00:00", label: "Save the date" },
@@ -128,8 +141,6 @@ export const TEMPLATES = [
     id: "boda-bohemia-romantica",
     name: "Boda Bohemia Atardecer",
     category: "boda",
-    thumbnailUrl: "/api/thumb/"+id,
-    previewUrl: "/api/thumb/"+id,
     active: true,
     createdAt: Date.now() + 2,
     builderConfig: baseBuilder({
@@ -150,8 +161,6 @@ export const TEMPLATES = [
     id: "boda-jardin-botanico",
     name: "Boda Jardín Botánico",
     category: "boda",
-    thumbnailUrl: "/api/thumb/"+id,
-    previewUrl: "/api/thumb/"+id,
     active: true,
     createdAt: Date.now() + 3,
     builderConfig: baseBuilder({
@@ -172,8 +181,6 @@ export const TEMPLATES = [
     id: "boda-noche-lujo",
     name: "Boda Noche de Lujo",
     category: "boda",
-    thumbnailUrl: "/api/thumb/"+id,
-    previewUrl: "/api/thumb/"+id,
     active: true,
     createdAt: Date.now() + 4,
     builderConfig: baseBuilder({
@@ -193,8 +200,6 @@ export const TEMPLATES = [
     id: "boda-destino-playa",
     name: "Boda Destino Playa",
     category: "boda",
-    thumbnailUrl: "/api/thumb/"+id,
-    previewUrl: "/api/thumb/"+id,
     active: true,
     createdAt: Date.now() + 5,
     builderConfig: baseBuilder({
@@ -215,12 +220,10 @@ export const TEMPLATES = [
     id: "cumple-infantil-arcoiris",
     name: "Cumple Arcoíris Infantil",
     category: "cumpleanos",
-    thumbnailUrl: "/api/thumb/"+id,
-    previewUrl: "/api/thumb/"+id,
     active: true,
     createdAt: Date.now() + 10,
     builderConfig: baseBuilder({
-      primaryColor: "#FF6B6B", background: "#FFF9E6", fontFamily: "sans",
+      primaryColor: "#FF6B6B", background: "#FFF9E6", fontFamily: "sans", defaultImage: "/api/thumb/lock/1",
       modules: [
         { id: "hdr", type: "header", visible: true, title: "¡Fiesta Arcoíris!", names: "Mateo cumple 5", date: "2026-04-18T15:00:00", subtitle: "Colores, pastel y piñata", imageUrl: "/api/thumb/lock/2", style: { background: "linear-gradient(135deg,#FF6B6B,#FFD166)", textColor: "#FFFFFF", padding: "36px 20px", borderRadius: "20px" } },
         { id: "cd", type: "countdown", visible: true, targetDate: "2026-04-18T15:00:00", label: "Ya casi" },
@@ -236,12 +239,10 @@ export const TEMPLATES = [
     id: "cumple-neon-urbano",
     name: "Cumple Neon Urbano 25",
     category: "cumpleanos",
-    thumbnailUrl: "/api/thumb/"+id,
-    previewUrl: "/api/thumb/"+id,
     active: true,
     createdAt: Date.now() + 11,
     builderConfig: baseBuilder({
-      primaryColor: "#FF2E93", background: "#0A0A0A", backgroundImage: "/api/thumb/lock/50", backgroundOverlay: "rgba(0,0,0,0.6)", textColor: "#FFFFFF", fontFamily: "sans",
+      primaryColor: "#FF2E93", background: "#0A0A0A", backgroundOverlay: "rgba(0,0,0,0.6)", textColor: "#FFFFFF", fontFamily: "sans", defaultImage: "/api/thumb/lock/1",
       modules: [
         { id: "hdr", type: "header", visible: true, title: "NEON 25", names: "Sofi — Rooftop Party", date: "2026-07-12T21:00:00", subtitle: "Brilla, baila, celebra", imageUrl: "/api/thumb/lock/6", style: { background: "rgba(255,46,147,0.12)", textColor: "#FFFFFF", border: "1px solid rgba(255,46,147,0.35)", padding: "32px 20px", borderRadius: "16px" } },
         { id: "cd", type: "countdown", visible: true, targetDate: "2026-07-12T21:00:00", label: "Neon countdown" },
@@ -257,8 +258,6 @@ export const TEMPLATES = [
     id: "cumple-elegante-40",
     name: "Cumple Elegante 40",
     category: "cumpleanos",
-    thumbnailUrl: "/api/thumb/"+id,
-    previewUrl: "/api/thumb/"+id,
     active: true,
     createdAt: Date.now() + 12,
     builderConfig: baseBuilder({
@@ -278,8 +277,6 @@ export const TEMPLATES = [
     id: "cumple-tropical-30",
     name: "Cumple Tropical 30",
     category: "cumpleanos",
-    thumbnailUrl: "/api/thumb/"+id,
-    previewUrl: "/api/thumb/"+id,
     active: true,
     createdAt: Date.now() + 13,
     builderConfig: baseBuilder({
@@ -298,8 +295,6 @@ export const TEMPLATES = [
     id: "cumple-vintage-50",
     name: "Cumple Vintage 50",
     category: "cumpleanos",
-    thumbnailUrl: "/api/thumb/"+id,
-    previewUrl: "/api/thumb/"+id,
     active: true,
     createdAt: Date.now() + 14,
     builderConfig: baseBuilder({
@@ -319,8 +314,6 @@ export const TEMPLATES = [
     id: "cumple-glam-30",
     name: "Cumple Glam 30",
     category: "cumpleanos",
-    thumbnailUrl: "/api/thumb/"+id,
-    previewUrl: "/api/thumb/"+id,
     active: true,
     createdAt: Date.now() + 15,
     builderConfig: baseBuilder({
@@ -340,8 +333,6 @@ export const TEMPLATES = [
     id: "babyshower-nubes-editorial",
     name: "Babyshower Nubes Editorial",
     category: "babyshower",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 20,
     builderConfig: baseBuilder({
@@ -361,12 +352,10 @@ export const TEMPLATES = [
     id: "babyshower-selva-moderna",
     name: "Babyshower Selva Moderna",
     category: "babyshower",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 21,
     builderConfig: baseBuilder({
-      primaryColor: "#2F6B3A", background: "#F3FFF0", fontFamily: "sans",
+      primaryColor: "#2F6B3A", background: "#F3FFF0", fontFamily: "sans", defaultImage: "/api/thumb/lock/1",
       modules: [
         { id: "hdr", type: "header", visible: true, title: "Selva Baby", names: "León — Llega el rey", date: "2026-07-05T15:00:00", subtitle: "Hojas, aventura y ternura", imageUrl: "/api/thumb/lock/4", style: { backgroundImage: "/api/thumb/lock/4", backgroundOverlay: "rgba(243,255,240,0.78)", padding: "44px 20px", borderRadius: "16px" } },
         { id: "it", type: "itinerary", visible: true, items: [{ time: "15:00", title: "Bienvenida selva" }, { time: "16:30", title: "Juegos" }] },
@@ -381,8 +370,6 @@ export const TEMPLATES = [
     id: "babyshower-elefantito-clasico",
     name: "Babyshower Elefantito Clásico",
     category: "babyshower",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 22,
     builderConfig: baseBuilder({
@@ -401,8 +388,6 @@ export const TEMPLATES = [
     id: "babyshower-arcoiris-pastel",
     name: "Babyshower Arcoíris Pastel",
     category: "babyshower",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 23,
     builderConfig: baseBuilder({
@@ -421,8 +406,6 @@ export const TEMPLATES = [
     id: "babyshower-bosque-encantado",
     name: "Babyshower Bosque Encantado",
     category: "babyshower",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 24,
     builderConfig: baseBuilder({
@@ -441,8 +424,6 @@ export const TEMPLATES = [
     id: "babyshower-dulce-rosa",
     name: "Babyshower Dulce Rosa",
     category: "babyshower",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 25,
     builderConfig: baseBuilder({
@@ -462,8 +443,6 @@ export const TEMPLATES = [
     id: "bautizo-angel-blanco",
     name: "Bautizo Ángel Blanco",
     category: "bautizo",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 30,
     builderConfig: baseBuilder({
@@ -482,8 +461,6 @@ export const TEMPLATES = [
     id: "bautizo-clasico-catedral",
     name: "Bautizo Catedral Clásico",
     category: "bautizo",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 31,
     builderConfig: baseBuilder({
@@ -502,8 +479,6 @@ export const TEMPLATES = [
     id: "bautizo-acuarela-moderna",
     name: "Bautizo Acuarela Moderna",
     category: "bautizo",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 32,
     builderConfig: baseBuilder({
@@ -522,12 +497,10 @@ export const TEMPLATES = [
     id: "bautizo-principe-azul",
     name: "Bautizo Pequeño Príncipe",
     category: "bautizo",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 33,
     builderConfig: baseBuilder({
-      primaryColor: "#4A5A8A", background: "#F8F5FF", fontFamily: "serif",
+      primaryColor: "#4A5A8A", background: "#F8F5FF", fontFamily: "serif", defaultImage: "/api/thumb/lock/1",
       modules: [
         { id: "hdr", type: "header", visible: true, title: "Mi Principito", names: "Leo — Corona y amor", date: "2026-05-16T12:00:00", subtitle: "Pequeño rey, gran bendición", imageUrl: "/api/thumb/lock/9", style: { backgroundImage: "/api/thumb/lock/9", backgroundOverlay: "rgba(248,245,255,0.78)", padding: "44px 20px", borderRadius: "16px" } },
         { id: "dc", type: "dresscode", visible: true, code: "Celeste y blanco", description: "Formal bautismal." },
@@ -541,12 +514,10 @@ export const TEMPLATES = [
     id: "bautizo-luz-dorada",
     name: "Bautizo Luz Dorada",
     category: "bautizo",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 34,
     builderConfig: baseBuilder({
-      primaryColor: "#B9972B", background: "#FFFEF0", fontFamily: "serif",
+      primaryColor: "#B9972B", background: "#FFFEF0", fontFamily: "serif", defaultImage: "/api/thumb/lock/1",
       modules: [
         { id: "hdr", type: "header", visible: true, title: "Luz divina", names: "Alana — Que tu luz brille", date: "2026-09-20T11:30:00", subtitle: "Dorado, luz y fe", imageUrl: "/api/thumb/lock/11", style: { background: "#FFFEF0", textColor: "#6B5A1A", border: "1px solid #F5E6A0", padding: "40px 20px", borderRadius: "16px" } },
         { id: "cd", type: "countdown", visible: true, targetDate: "2026-09-20T11:30:00", label: "Luz en camino" },
@@ -561,8 +532,6 @@ export const TEMPLATES = [
     id: "bautizo-floral-jardin",
     name: "Bautizo Floral Jardín",
     category: "bautizo",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 35,
     builderConfig: baseBuilder({
@@ -581,12 +550,10 @@ export const TEMPLATES = [
     id: "corp-tech-summit",
     name: "Tech Summit 2026",
     category: "corporativo",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 40,
     builderConfig: baseBuilder({
-      primaryColor: "#2563EB", background: "#F0F6FF", fontFamily: "sans",
+      primaryColor: "#2563EB", background: "#F0F6FF", fontFamily: "sans", defaultImage: "/api/thumb/lock/1",
       modules: [
         { id: "hdr", type: "header", visible: true, title: "Tech Summit 2026", names: "Innovación sin límites", date: "2026-10-22T09:00:00", subtitle: "Keynotes, demos, networking", imageUrl: "/api/thumb/lock/2", style: { background: "#FFFFFF", border: "1px solid #DBEAFE", padding: "32px 20px", borderRadius: "12px" } },
         { id: "cd", type: "countdown", visible: true, targetDate: "2026-10-22T09:00:00", label: "Falta para el summit" },
@@ -602,12 +569,10 @@ export const TEMPLATES = [
     id: "corp-gala-anual",
     name: "Gala Anual Negocios",
     category: "corporativo",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 41,
     builderConfig: baseBuilder({
-      primaryColor: "#0F172A", background: "#F8FAFC", fontFamily: "serif",
+      primaryColor: "#0F172A", background: "#F8FAFC", fontFamily: "serif", defaultImage: "/api/thumb/lock/1",
       modules: [
         { id: "hdr", type: "header", visible: true, title: "Gala Anual", names: "Premios Empresariales 2026", date: "2026-11-28T20:00:00", subtitle: "Celebrando la excelencia", imageUrl: "/api/thumb/lock/4", style: { background: "#0F172A", textColor: "#F8FAFC", padding: "48px 20px", borderRadius: "12px" } },
         { id: "cd", type: "countdown", visible: true, targetDate: "2026-11-28T20:00:00", label: "Gala" },
@@ -622,12 +587,10 @@ export const TEMPLATES = [
     id: "corp-lanzamiento-producto",
     name: "Lanzamiento Producto X",
     category: "corporativo",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 42,
     builderConfig: baseBuilder({
-      primaryColor: "#7C3AED", background: "#FAF5FF", fontFamily: "sans",
+      primaryColor: "#7C3AED", background: "#FAF5FF", fontFamily: "sans", defaultImage: "/api/thumb/lock/1",
       modules: [
         { id: "hdr", type: "header", visible: true, title: "Producto X — Reveal", names: "El futuro es ahora", date: "2026-09-10T18:30:00", subtitle: "Demo en vivo, cóctel y prensa", imageUrl: "/api/thumb/lock/6", style: { background: "linear-gradient(135deg,#FAF5FF,#F5F3FF)", padding: "40px 20px", borderRadius: "20px", border: "1px solid #E9D5FF" } },
         { id: "cd", type: "countdown", visible: true, targetDate: "2026-09-10T18:30:00", label: "Reveal" },
@@ -642,12 +605,10 @@ export const TEMPLATES = [
     id: "corp-networking-cocktail",
     name: "Networking Cocktail",
     category: "corporativo",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 43,
     builderConfig: baseBuilder({
-      primaryColor: "#047857", background: "#ECFDF5", fontFamily: "sans",
+      primaryColor: "#047857", background: "#ECFDF5", fontFamily: "sans", defaultImage: "/api/thumb/lock/1",
       modules: [
         { id: "hdr", type: "header", visible: true, title: "Networking Cocktail", names: "Conecta & Crece", date: "2026-08-20T18:00:00", subtitle: "Cóctel ejecutivo, pitch 1-min", imageUrl: "/api/thumb/lock/9" },
         { id: "it", type: "itinerary", visible: true, items: [{ time: "18:00", title: "Bienvenida" }, { time: "19:00", title: "Pitch 1-min" }, { time: "20:30", title: "Cóctel libre" }] },
@@ -662,12 +623,10 @@ export const TEMPLATES = [
     id: "corp-anual-formal",
     name: "Reunión Anual Formal",
     category: "corporativo",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 44,
     builderConfig: baseBuilder({
-      primaryColor: "#334155", background: "#F1F5F9", fontFamily: "serif",
+      primaryColor: "#334155", background: "#F1F5F9", fontFamily: "serif", defaultImage: "/api/thumb/lock/1",
       modules: [
         { id: "hdr", type: "header", visible: true, title: "Reunión Anual", names: "Grupo Invify 2026", date: "2026-12-12T10:00:00", subtitle: "Resultados y visión 2027", imageUrl: "/api/thumb/lock/11", style: { background: "#FFFFFF", border: "1px solid #E2E8F0", padding: "32px 20px", borderRadius: "8px" } },
         { id: "cd", type: "countdown", visible: true, targetDate: "2026-12-12T10:00:00", label: "Reunión anual" },
@@ -682,8 +641,6 @@ export const TEMPLATES = [
     id: "corp-startup-pitch",
     name: "Startup Pitch Night",
     category: "corporativo",
-    thumbnailUrl: `/api/thumb/${t.id}`,
-    previewUrl: `/api/thumb/${t.id}?size=lg`,
     active: true,
     createdAt: Date.now() + 45,
     builderConfig: baseBuilder({
@@ -700,6 +657,15 @@ export const TEMPLATES = [
     }),
   },
 ];
+
+// Cada plantilla usa su propio id para las imágenes de catálogo y preview.
+// Antes estos campos usaban `"/api/thumb/"+id` o `${t.id}`, que no estaban
+// definidos en ningún scope y hacían fallar el seed con "id is not defined".
+export const TEMPLATES = RAW_TEMPLATES.map((t) => ({
+  ...t,
+  thumbnailUrl: `/api/thumb/${t.id}`,
+  previewUrl: `/api/thumb/${t.id}?size=lg`,
+}));
 
 export function demoTemplate() {
   return TEMPLATES[0];
