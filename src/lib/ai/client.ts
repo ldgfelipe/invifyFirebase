@@ -16,16 +16,18 @@ export interface ChatResult {
 }
 
 /**
- * Normaliza un JSON escrito por un LLM con errores típicos:
- * 1. Claves con comilla simple tras doble: "key':  → "key":
- * 2. Comillas simples en claves o valores: 'key' → "key"
- * 3. Claves sin comillas: {key: v} → {"key": v}
- */
+  * Normaliza un JSON escrito por un LLM con errores típicos:
+  * 1. Claves con comilla simple tras doble: "key':  → "key":
+  * 2. Comillas simples en claves o valores: 'key' → "key"
+  * 3. Claves sin comillas: {key: v} → {"key": v}
+  * 4. Comilla antes de dos puntos tras [ o {: [{":  → [{"
+  */
 function normalizeLlmJson(candidate: string): string {
   let s = candidate;
   s = s.replace(/"([^"]*)'\s*:/g, '"$1":');
   s = s.replace(/'([^']*)'/g, '"$1"');
   s = s.replace(/([{,]\s*)(\w+)(\s*:)/g, "$1\"$2\"$3");
+  s = s.replace(/([{[])":/g, "$1{\"");
   return s;
 }
 
@@ -48,13 +50,62 @@ export function extractJson(content: string): any | null {
           try {
             return JSON.parse(normalizeLlmJson(candidate));
           } catch {
-            return null;
+            // Fallback: intentar extraer modules y theme por regex del raw.
+            return fallbackExtract(candidate);
           }
         }
       }
     }
   }
   return null;
+}
+
+/** Extrae modules y theme de un JSON roto por regex. */
+function fallbackExtract(raw: string): any | null {
+  try {
+    // Extraer el array de modules contando corchetes.
+    const modStart = raw.indexOf('"modules"');
+    if (modStart === -1) return null;
+    const arrStart = raw.indexOf("[", modStart);
+    if (arrStart === -1) return null;
+    let depth = 0;
+    let arrEnd = -1;
+    for (let i = arrStart; i < raw.length; i++) {
+      if (raw[i] === "[") depth++;
+      else if (raw[i] === "]") {
+        depth--;
+        if (depth === 0) { arrEnd = i + 1; break; }
+      }
+    }
+    if (arrEnd === -1) return null;
+    const modulesStr = raw.slice(arrStart, arrEnd);
+    const modules = JSON.parse(normalizeLlmJson(modulesStr));
+
+    // Extraer theme si existe.
+    const themeStart = raw.indexOf('"theme"');
+    let theme: any = {};
+    if (themeStart !== -1) {
+      const objStart = raw.indexOf("{", themeStart);
+      if (objStart !== -1) {
+        let td = 0;
+        let objEnd = -1;
+        for (let i = objStart; i < raw.length; i++) {
+          if (raw[i] === "{") td++;
+          else if (raw[i] === "}") {
+            td--;
+            if (td === 0) { objEnd = i + 1; break; }
+          }
+        }
+        if (objEnd !== -1) {
+          const themeStr = raw.slice(objStart, objEnd);
+          theme = JSON.parse(normalizeLlmJson(themeStr));
+        }
+      }
+    }
+    return { modules, theme };
+  } catch {
+    return null;
+  }
 }
 
 /** Config lista para llamar: aplica defaults y valida la URL base. */
