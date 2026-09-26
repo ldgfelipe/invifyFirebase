@@ -5,7 +5,7 @@
 // lee en claro. El cliente recibe siempre una versiÃ³n enmascarada.
 // ============================================================================
 import { adminDb } from "@/lib/firebase/admin";
-import type { AiSettings, AiSettingsPublic } from "@/lib/types";
+import type { AiProviderConfig, AiSettings, AiSettingsPublic } from "@/lib/types";
 import { isKnownProvider, resolveProvider } from "./providers";
 import { chatCompletion, isProviderReady, type ChatMessage } from "./client";
 
@@ -23,6 +23,7 @@ export const DEFAULT_AI_SETTINGS: AiSettings = {
   apiKey: "",
   baseUrl: AI_DEFAULT_BASE_URL,
   model: AI_DEFAULT_MODEL,
+  aiProviders: [],
   temperature: 0.6,
   maxTokens: 2000,
   systemPrompt:
@@ -61,12 +62,38 @@ export function normalizeAiSettings(raw: unknown, base: AiSettings = DEFAULT_AI_
     r.languageMode === "es" || r.languageMode === "en" ? r.languageMode : "auto";
   const imageSource = r.imageSource === "picsum" ? "picsum" : "local";
 
+  const existingProviders: AiProviderConfig[] = Array.isArray(r.aiProviders)
+    ? (r.aiProviders as AiProviderConfig[]).filter(
+        (p: AiProviderConfig) => p && isKnownProvider(p.provider)
+      )
+    : [];
+
+  let aiProviders: AiProviderConfig[];
+  if (existingProviders.length > 0) {
+    // Ordenar por priority y re-numerar
+    aiProviders = existingProviders.sort((a, b) => a.priority - b.priority);
+    aiProviders = aiProviders.map((p, i) => ({ ...p, priority: i }));
+  } else {
+    // MigraciÃ³n legacy: un solo proveedor.
+    aiProviders = [{
+      provider,
+      apiKey: typeof r.apiKey === "string" ? r.apiKey.trim() : base.apiKey,
+      model: str(r.model, base.model),
+      baseUrl: str(r.baseUrl, base.baseUrl).replace(/\/+$/, ""),
+      enabled: true,
+      priority: 0,
+    }];
+  }
+
+  const first = aiProviders[0];
+
   return {
     enabled: bool(r.enabled, base.enabled),
-    provider,
-    apiKey: typeof r.apiKey === "string" ? r.apiKey.trim() : base.apiKey,
-    baseUrl: str(r.baseUrl, base.baseUrl).replace(/\/+$/, ""),
-    model: str(r.model, base.model),
+    provider: first.provider,
+    apiKey: first.apiKey,
+    baseUrl: first.baseUrl || resolveProvider(first.provider).baseUrl,
+    model: first.model,
+    aiProviders,
     temperature: clamp(r.temperature, 0, 2, base.temperature),
     maxTokens: Math.round(clamp(r.maxTokens, 64, 16000, base.maxTokens)),
     systemPrompt: typeof r.systemPrompt === "string" ? r.systemPrompt : base.systemPrompt,
@@ -119,9 +146,9 @@ async function readStoredDoc(): Promise<Record<string, unknown>> {
 }
 
 /**
- * Carga la config efectiva del asistente.
- * Always returns a complete object; never throws.
- */
+  * Carga la config efectiva del asistente.
+  * Always returns a complete object; never throws.
+  */
 export async function getAiSettings(): Promise<AiSettings> {
   const stored = await readStoredDoc();
 
@@ -132,10 +159,10 @@ export async function getAiSettings(): Promise<AiSettings> {
 }
 
 /**
- * Indica si la apiKey proviene de una variable de entorno (no editable en el
- * panel). Debe leer el documento crudo: getAiSettings() ya resolviÃ³ el fallback
- * del entorno, asÃ­ que consultarla devolverÃ­a siempre false.
- */
+  * Indica si la apiKey proviene de una variable de entorno (no editable en el
+  * panel). Debe leer el documento crudo: getAiSettings() ya resolviÃ³ el fallback
+  * del entorno, asÃ­ que consultarla devolverÃ­a siempre false.
+  */
 export async function isApiKeyFromEnv(): Promise<boolean> {
   const envKey = process.env.OPENAI_API_KEY || process.env.AI_API_KEY || "";
   if (!envKey) return false;
@@ -143,11 +170,16 @@ export async function isApiKeyFromEnv(): Promise<boolean> {
   return !str(stored.apiKey, "");
 }
 
-/** Enmascara la clave para poder mostrarla sin exponerla. */
+/** Enmascara una clave para poder mostrarla sin exponerla. */
 export function maskApiKey(key: string): string {
   if (!key) return "";
   if (key.length <= 11) return "â€¢".repeat(key.length);
   return `${key.slice(0, 6)}${"â€¢".repeat(8)}${key.slice(-4)}`;
+}
+
+/** Enmascara las claves de cada proveedor de la lista. */
+function maskProviders(providers: AiProviderConfig[]): Array<AiProviderConfig & { apiKeyMasked: string }> {
+  return providers.map((p) => ({ ...p, apiKeyMasked: maskApiKey(p.apiKey) }));
 }
 
 /** Proyecta la config a la vista pÃºblica (sin la clave en claro). */
@@ -161,6 +193,7 @@ export function toPublicSettings(
     apiKeyMasked: maskApiKey(apiKey),
     hasApiKey: Boolean(apiKey),
     apiKeyFromEnv: Boolean(opts.apiKeyFromEnv),
+    aiProviders: maskProviders(settings.aiProviders || []),
   };
 }
 
@@ -174,6 +207,15 @@ export async function saveAiSettings(
   next.updatedAt = Date.now();
   next.updatedBy = admin.email || admin.uid;
 
+  // Asegurar que los campos single se mantienen sincronizados con aiProviders[0]
+  const first = next.aiProviders?.[0];
+  if (first) {
+    next.provider = first.provider;
+    next.apiKey = first.apiKey;
+    next.model = first.model;
+    next.baseUrl = first.baseUrl || resolveProvider(first.provider).baseUrl;
+  }
+
   await adminDb
     .collection(DOC_PATH.collection)
     .doc(DOC_PATH.docId)
@@ -183,15 +225,33 @@ export async function saveAiSettings(
 }
 
 /**
- * Llama al proveedor configurado (OpenAI-compatible o Gemini).
- * Devuelve null si la IA está apagada, falta la credencial o la URL base;
- * en ese caso el wizard cae al mock determinista.
- */
+  * Llama al proveedor con mayor prioridad; si falla, intenta con los
+  * siguientes en orden. Devuelve null si todos fallan o la IA estÃ¡ apagada.
+  */
 export async function callAi(
   settings: AiSettings,
-  messages: ChatMessage[]
+  messages: ChatMessage[],
+  opts?: { timeoutMs?: number; forceJson?: boolean }
 ): Promise<{ json: any; raw: string; latencyMs: number } | null> {
-  if (!isProviderReady(settings)) return null;
-  return chatCompletion(settings, messages);
+  if (!settings.enabled) return null;
+  const providers = (settings.aiProviders ?? []).length > 0
+    ? [...(settings.aiProviders ?? [])].sort((a, b) => a.priority - b.priority)
+    : null;
+
+  const attempts = providers || [
+    { provider: settings.provider, apiKey: settings.apiKey, model: settings.model, baseUrl: settings.baseUrl },
+  ];
+
+  const timeoutMs = opts?.timeoutMs ?? 60_000;
+  for (const p of attempts) {
+    const s = { ...settings, provider: p.provider, apiKey: p.apiKey, model: p.model, baseUrl: p.baseUrl || resolveProvider(p.provider).baseUrl };
+    if (!isProviderReady(s)) continue;
+    try {
+      return await chatCompletion(s, messages, { timeoutMs, forceJson: opts?.forceJson });
+    } catch {
+      continue;
+    }
+  }
+  return null;
 }
 

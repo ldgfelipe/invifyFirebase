@@ -13,7 +13,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { PROVIDERS, resolveProvider } from "@/lib/ai/providers";
-import type { AiSettingsPublic } from "@/lib/types";
+import type { AiSettingsPublic, AiProvider, AiProviderConfig, AiTestResult } from "@/lib/types";
 
 type Tab = "conexion" | "comportamiento" | "prompts" | "imagenes";
 
@@ -40,6 +40,7 @@ const EMPTY: FormState = {
   maxGenerationsPerDay: 0,
   defaultNames: "",
   defaultNamesEn: "",
+  aiProviders: [] as Array<AiProviderConfig & { apiKeyMasked: string }>,
 };
 
 const TABS: { id: Tab; label: string }[] = [
@@ -66,16 +67,13 @@ const PROVIDER_GROUPS: [string, typeof PROVIDERS][] = (() => {
 
 export default function AdminAiSettingsPage() {
   const { user } = useAuth();
-  const [form, setForm] = useState<FormState>(EMPTY);
-  const [lastTest, setLastTest] = useState<AiSettingsPublic["lastTest"] | undefined>();
-  const [updatedAt, setUpdatedAt] = useState<number | undefined>();
+   const [form, setForm] = useState<FormState>(EMPTY);
+   const [lastTest, setLastTest] = useState<AiSettingsPublic["lastTest"] | undefined>();
+   const [providerTests, setProviderTests] = useState<Map<number, AiTestResult>>(new Map());
+   const [updatedAt, setUpdatedAt] = useState<number | undefined>();
   const [tab, setTab] = useState<Tab>("conexion");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [loadingModels, setLoadingModels] = useState(false);
-  const [remoteModels, setRemoteModels] = useState<string[]>([]);
-  const [modelMsg, setModelMsg] = useState<string | null>(null);
-  const [baseUrlEdited, setBaseUrlEdited] = useState(false);
 
   const preset = useMemo(() => resolveProvider(form.provider), [form.provider]);
 
@@ -90,108 +88,60 @@ export default function AdminAiSettingsPage() {
     }
   }, [form.baseUrl]);
 
-  const keyPlaceholder =
-    preset?.id === "gemini"
-      ? "AIza… (Google AI Studio)"
-      : preset?.id === "cloudflare"
-        ? "Token de cuenta de Cloudflare"
-        : "sk-… / gsk_… / xai-…";
+    const [testing, setTesting] = useState(false);
+    const [testingProviderIdx, setTestingProviderIdx] = useState<number | null>(null);
+    const [msg, setMsg] = useState<string | null>(null);
+    const [err, setErr] = useState<string | null>(null);
 
-  /**
-   * Cambiar de proveedor arrastra su base y su modelo por defecto, salvo que el
-   * admin ya haya escrito una base a mano: en ese caso se respeta su URL para no
-   * borrar un proxy configurado a propósito.
-   */
-  function selectProvider(id: FormState["provider"]) {
-    const next = resolveProvider(id);
-    setForm((f) => ({
-      ...f,
-      provider: next.id,
-      baseUrl: baseUrlEdited && next.baseUrl === "" ? f.baseUrl : next.baseUrl,
-      model: next.defaultModel || f.model,
-    }));
-    setRemoteModels([]);
-    setModelMsg(null);
-  }
+    const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
+      setForm((prev) => ({ ...prev, [key]: value }));
 
-  /** Pregunta al proveedor qué modelos permite esta clave. */
-  async function loadModels() {
-    setLoadingModels(true);
-    setModelMsg(null);
-    setErr(null);
-    try {
-      const res = await fetch("/api/admin/ai-config/models", {
-        method: "POST",
-        headers: await authHeaders(),
-        body: JSON.stringify({
-          provider: form.provider,
-          baseUrl: form.baseUrl,
-          apiKey: form.apiKey,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "No se pudieron cargar los modelos");
-      setRemoteModels(data.models ?? []);
-      setModelMsg(data.message ?? null);
-    } catch (e: any) {
-      setErr(e.message);
-      setModelMsg(null);
-    } finally {
-      setLoadingModels(false);
-    }
-  }
-  const [testing, setTesting] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
+    const authHeaders = useCallback(async () => {
+     if (!user) throw new Error("Sesión no disponible");
+     return {
+       "Content-Type": "application/json",
+       Authorization: `Bearer ${await user.getIdToken()}`,
+     };
+   }, [user]);
 
-  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
-    setForm((prev) => ({ ...prev, [key]: value }));
-
-  const authHeaders = useCallback(async () => {
-    if (!user) throw new Error("Sesión no disponible");
-    return {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${await user.getIdToken()}`,
-    };
-  }, [user]);
-
-  const load = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    setErr(null);
-    try {
-      const res = await fetch("/api/admin/ai-config", { headers: await authHeaders() });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "No autorizado");
-      const s = data.settings as AiSettingsPublic;
-      setForm({
-        enabled: s.enabled,
-        provider: s.provider,
-        apiKey: "",
-        apiKeyMasked: s.apiKeyMasked,
-        hasApiKey: s.hasApiKey,
-        apiKeyFromEnv: s.apiKeyFromEnv,
-        baseUrl: s.baseUrl,
-        model: s.model,
-        temperature: s.temperature,
-        maxTokens: s.maxTokens,
-        systemPrompt: s.systemPrompt,
-        customInstructions: s.customInstructions,
-        languageMode: s.languageMode,
-        fallbackToMock: s.fallbackToMock,
-        imageSource: s.imageSource,
-        maxGenerationsPerDay: s.maxGenerationsPerDay,
-        defaultNames: s.defaultNames,
-        defaultNamesEn: s.defaultNamesEn,
-      });
-      setLastTest(s.lastTest);
-      setUpdatedAt(s.updatedAt);
-    } catch (e: any) {
-      setErr(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [user, authHeaders]);
+   const load = useCallback(async () => {
+     if (!user) return;
+     setLoading(true);
+     setErr(null);
+     try {
+       const res = await fetch("/api/admin/ai-config", { headers: await authHeaders() });
+       const data = await res.json();
+       if (!res.ok) throw new Error(data.error ?? "No autorizado");
+       const s = data.settings as AiSettingsPublic;
+       setForm({
+         enabled: s.enabled,
+         provider: s.provider,
+         apiKey: "",
+         apiKeyMasked: s.apiKeyMasked,
+         hasApiKey: s.hasApiKey,
+         apiKeyFromEnv: s.apiKeyFromEnv,
+         baseUrl: s.baseUrl,
+         model: s.model,
+         temperature: s.temperature,
+         maxTokens: s.maxTokens,
+         systemPrompt: s.systemPrompt,
+         customInstructions: s.customInstructions,
+         languageMode: s.languageMode,
+         fallbackToMock: s.fallbackToMock,
+         imageSource: s.imageSource,
+         maxGenerationsPerDay: s.maxGenerationsPerDay,
+         defaultNames: s.defaultNames,
+         defaultNamesEn: s.defaultNamesEn,
+          aiProviders: s.aiProviders ?? [],
+       });
+       setLastTest(s.lastTest);
+       setUpdatedAt(s.updatedAt);
+     } catch (e: any) {
+       setErr(e.message);
+     } finally {
+       setLoading(false);
+     }
+   }, [user, authHeaders]);
 
   useEffect(() => {
     if (user) load();
@@ -206,6 +156,15 @@ export default function AdminAiSettingsPage() {
       delete (payload as any).apiKeyMasked;
       delete (payload as any).hasApiKey;
       delete (payload as any).apiKeyFromEnv;
+      // Enviar la lista de proveedores con claves enmascaradas.
+       payload.aiProviders = (form.aiProviders ?? []).map((p: any) => ({
+         provider: p.provider,
+         model: p.model,
+         apiKeyMasked: p.apiKeyMasked,
+         baseUrl: p.baseUrl,
+         enabled: p.enabled,
+         priority: p.priority,
+       }));
 
       const res = await fetch("/api/admin/ai-config", {
         method: "PUT",
@@ -217,7 +176,13 @@ export default function AdminAiSettingsPage() {
       const s = data.settings as AiSettingsPublic;
       setLastTest(s.lastTest);
       setUpdatedAt(s.updatedAt);
-      setForm((prev) => ({ ...prev, apiKey: "", apiKeyMasked: s.apiKeyMasked, hasApiKey: s.hasApiKey }));
+      setForm((prev) => ({
+        ...prev,
+        apiKey: "",
+        apiKeyMasked: s.apiKeyMasked,
+        hasApiKey: s.hasApiKey,
+        aiProviders: s.aiProviders ?? [],
+      }));
       setMsg("Configuración del asistente guardada.");
     } catch (e: any) {
       setErr(e.message);
@@ -250,6 +215,40 @@ export default function AdminAiSettingsPage() {
       setErr(e.message);
     } finally {
       setTesting(false);
+    }
+  }
+
+  async function testProvider(idx: number) {
+    const p = form.aiProviders[idx];
+    if (!p) return;
+    setTestingProviderIdx(idx);
+    setErr(null);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/admin/ai-config/test", {
+        method: "POST",
+        headers: await authHeaders(),
+        body: JSON.stringify({
+          providerConfig: {
+            provider: p.provider,
+            apiKey: p.apiKeyMasked,
+            baseUrl: p.baseUrl,
+            model: p.model,
+          },
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Error probando la conexión");
+      setProviderTests((prev) => {
+        const next = new Map(prev);
+        next.set(idx, data.result);
+        return next;
+      });
+      setMsg(data.result.ok ? `Conexión verificada con ${p.provider}.` : `Falló con ${p.provider}.`);
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setTestingProviderIdx(null);
     }
   }
 
@@ -318,131 +317,166 @@ export default function AdminAiSettingsPage() {
               </span>
             </label>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm text-ink/70 block mb-1">Proveedor</label>
-                <select
-                  className="input"
-                  value={form.provider}
-                  onChange={(e) => selectProvider(e.target.value as FormState["provider"])}
-                >
-                  {PROVIDER_GROUPS.map(([group, items]) => (
-                    <optgroup key={group} label={group}>
-                      {items.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.label}
-                        </option>
+            <p className="text-sm text-ink/60">
+              La primera entrada de la lista es la que se usa primero. Si falla o se acaban los tokens,
+              se intenta la siguiente. Arrastra (sube/baja) para cambiar prioridad.
+            </p>
+
+            {(form.aiProviders ?? []).map((p, idx) => {
+              const preset = resolveProvider(p.provider as any);
+              return (
+                <div key={idx} className="p-4 rounded-lg border border-ink/15 bg-cream/20 space-y-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Prioridad */}
+                    <div className="flex items-center gap-1 text-sm text-ink/60">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = [...form.aiProviders];
+                          if (idx > 0) { [next[idx], next[idx - 1]] = [next[idx - 1], next[idx]]; }
+                          setForm((f) => ({ ...f, aiProviders: next as any }));
+                        }}
+                        disabled={idx === 0}
+                        className="px-1 text-ink/50 hover:text-ink disabled:opacity-30"
+                      >
+                        ▲
+                      </button>
+                      <span>#{idx + 1}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = [...form.aiProviders];
+                          if (idx < next.length - 1) { [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]]; }
+                          setForm((f) => ({ ...f, aiProviders: next as any }));
+                        }}
+                        disabled={idx === form.aiProviders.length - 1}
+                        className="px-1 text-ink/50 hover:text-ink disabled:opacity-30"
+                      >
+                        ▼
+                      </button>
+                    </div>
+
+                    {/* Proveedor */}
+                    <select
+                      className="input text-sm"
+                      value={p.provider}
+                      onChange={(e) => {
+                        const next = [...form.aiProviders];
+                         next[idx] = { ...next[idx], provider: e.target.value as AiProvider };
+                        setForm((f) => ({ ...f, aiProviders: next as any }));
+                      }}
+                    >
+                      {PROVIDER_GROUPS.map(([group, items]) => (
+                        <optgroup key={group} label={group}>
+                          {items.map((pp) => (
+                            <option key={pp.id} value={pp.id}>{pp.label}</option>
+                          ))}
+                        </optgroup>
                       ))}
-                    </optgroup>
-                  ))}
-                </select>
-                {preset && (
-                  <p className="text-xs text-ink/50 mt-1">
-                    Formato de API:{" "}
-                    <code className="text-ink/70">{preset.wire === "gemini" ? "Gemini (generateContent)" : "OpenAI-compatible (chat/completions)"}</code>
-                    {preset.requiresKey ? "" : " · no requiere API key"}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="text-sm text-ink/70 block mb-1">Modelo</label>
-                <div className="flex gap-2">
-                  <input
-                    className="input"
-                    list="ai-model-suggestions"
-                    value={form.model}
-                    onChange={(e) => set("model", e.target.value)}
-                    placeholder={preset?.defaultModel || "gpt-4o-mini"}
-                  />
-                  {preset?.canListModels && (
+                    </select>
+
+                    {/* Modelo */}
+                    <input
+                      className="input text-sm flex-1 min-w-[120px]"
+                      value={p.model}
+                      onChange={(e) => {
+                        const next = [...form.aiProviders];
+                        next[idx] = { ...next[idx], model: e.target.value };
+                        setForm((f) => ({ ...f, aiProviders: next as any }));
+                      }}
+                      placeholder="Modelo"
+                    />
+
+                    {/* Habilitar */}
+                    <label className="flex items-center gap-1 text-sm text-ink/60 whitespace-nowrap">
+                      <input
+                        type="checkbox"
+                        checked={p.enabled}
+                        onChange={(e) => {
+                          const next = [...form.aiProviders];
+                          next[idx] = { ...next[idx], enabled: e.target.checked };
+                          setForm((f) => ({ ...f, aiProviders: next as any }));
+                        }}
+                        className="w-3.5 h-3.5"
+                      />
+                      Act
+                    </label>
+
+                    {/* Probar */}
                     <button
                       type="button"
-                      onClick={loadModels}
-                      disabled={loadingModels}
-                      className="shrink-0 px-3 py-2 text-sm font-medium rounded-lg border border-ink/15 text-ink/70 hover:bg-cream disabled:opacity-50 whitespace-nowrap"
-                      title="Preguntar al proveedor qué modelos permite esta clave"
+                      onClick={() => testProvider(idx)}
+                      disabled={testingProviderIdx === idx}
+                      className="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border border-ink/15 text-ink/70 hover:bg-cream disabled:opacity-50 whitespace-nowrap"
                     >
-                      {loadingModels ? "Cargando…" : "Ver modelos"}
+                      {testingProviderIdx === idx ? "…" : "Probar"}
                     </button>
-                  )}
+
+                    {/* Eliminar */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = form.aiProviders.filter((_, i) => i !== idx);
+                        setForm((f) => ({ ...f, aiProviders: next as any }));
+                      }}
+                      className="shrink-0 text-red-600 text-xs hover:text-red-800 whitespace-nowrap"
+                    >
+                      ✕
+                    </button>
+                  </div>
+
+                  {/* Base URL */}
+                  <div>
+                    <input
+                      className="input text-sm"
+                      value={p.baseUrl}
+                      onChange={(e) => {
+                        const next = [...form.aiProviders];
+                        next[idx] = { ...next[idx], baseUrl: e.target.value };
+                        setForm((f) => ({ ...f, aiProviders: next as any }));
+                      }}
+                      placeholder={preset?.baseUrl || "https://api.openai.com/v1"}
+                    />
+                  </div>
+
+                  {/* API Key */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                       <input
+                         type="password"
+                         className="input text-sm"
+                         value={(p as any).apiKeyMasked}
+                         onChange={(e) => {
+                           const next = [...form.aiProviders];
+                           next[idx] = { ...next[idx], apiKeyMasked: e.target.value };
+                           setForm((f) => ({ ...f, aiProviders: next as any }));
+                         }}
+                         placeholder={(p as any).apiKeyMasked ? "••••••••••" : preset?.requiresKey ? "API key…" : "No requiere"}
+                      />
+                    </div>
+                    {preset?.note && (
+                      <p className="text-xs text-amber-700/90 bg-amber-50 border border-amber-200 rounded px-2 py-1 self-start">
+                        {preset.note}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <datalist id="ai-model-suggestions">
-                  {(remoteModels.length ? remoteModels : (preset?.models ?? MODEL_SUGGESTIONS)).map((m) => (
-                    <option key={m} value={m} />
-                  ))}
-                </datalist>
-                {modelMsg && (
-                  <p className="text-xs text-ink/50 mt-1">
-                    {remoteModels.length ? `${modelMsg} ·` : modelMsg}
-                  </p>
-                )}
-              </div>
-            </div>
+              );
+            })}
 
-            <div>
-              <label className="text-sm text-ink/70 block mb-1">Base URL</label>
-              <input
-                className="input"
-                value={form.baseUrl}
-                onChange={(e) => {
-                  set("baseUrl", e.target.value);
-                  setBaseUrlEdited(true);
-                }}
-                placeholder={preset?.baseUrl || "https://api.openai.com/v1"}
-              />
-              <p className="text-xs text-ink/50 mt-1">
-                {preset?.wire === "gemini"
-                  ? "Base de Google AI Studio, hasta /v1beta. No se le añade /chat/completions."
-                  : "Debe incluir /v1. Ejemplo: https://api.openai.com/v1"}
-                {baseUrlEdited && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      set("baseUrl", preset?.baseUrl ?? "");
-                      setBaseUrlEdited(false);
-                    }}
-                    className="ml-2 underline hover:text-ink/80"
-                  >
-                    Restaurar la del proveedor
-                  </button>
-                )}
-              </p>
-              {baseUrlProblem && (
-                <p className="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1.5 mt-2">
-                  Esa URL ya termina en <code className="font-semibold">{baseUrlProblem}</code>, o sea
-                  que incluye el endpoint. Invify lo añade solo, así que la petición saldría a{" "}
-                  <code className="font-semibold">{form.baseUrl}/chat/completions</code> y el proveedor
-                  respondería 404. Escribe solo la base:{" "}
-                  <code className="font-semibold">{stripLastSegment(form.baseUrl)}</code>
-                </p>
-              )}
-              {preset?.note && (
-                <p className="text-xs text-amber-700/90 bg-amber-50 border border-amber-200 rounded px-2 py-1 mt-2">
-                  {preset.note}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label className="text-sm text-ink/70 block mb-1">API Key</label>
-              <input
-                className="input"
-                type="password"
-                autoComplete="off"
-                value={form.apiKey}
-                onChange={(e) => set("apiKey", e.target.value)}
-                placeholder={form.hasApiKey ? form.apiKeyMasked : keyPlaceholder}
-              />
-              <p className="text-xs text-ink/50 mt-1">
-                {form.apiKeyFromEnv
-                  ? "La clave actual viene de una variable de entorno (AI_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY…). Escríbela aquí para sobrescribirla."
-                  : form.hasApiKey
-                    ? `Clave guardada: ${form.apiKeyMasked}. Déjala vacía para conservarla.`
-                    : preset?.requiresKey
-                      ? `No hay clave guardada para ${preset.label}. La IA no podrá ejecutarse hasta que la configures.`
-                      : `${preset?.label} no necesita clave. Este campo se ignora.`}
-              </p>
-            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const next = [
+                  ...form.aiProviders,
+                   { provider: "openai" as AiProvider, model: "gpt-4o-mini", apiKeyMasked: "", baseUrl: "https://api.openai.com/v1", enabled: true, priority: form.aiProviders.length },
+                ];
+                setForm((f) => ({ ...f, aiProviders: next as any }));
+              }}
+              className="btn-outline text-sm"
+            >
+              + Agregar proveedor
+            </button>
 
             {lastTest && (
               <div
@@ -463,14 +497,6 @@ export default function AdminAiSettingsPage() {
                 </p>
               </div>
             )}
-
-            <button
-              onClick={testConnection}
-              disabled={testing}
-              className="btn-outline"
-            >
-              {testing ? "Probando…" : "Probar conexión"}
-            </button>
           </>
         )}
 

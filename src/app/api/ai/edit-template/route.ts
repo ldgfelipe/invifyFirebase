@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { getAiSettings } from "@/lib/ai/config";
-import { chatCompletion, extractJson, isProviderReady } from "@/lib/ai/client";
+import { callAi } from "@/lib/ai/config";
 import { ATMOSPHERE_OPTIONS, IMAGE_STYLE_OPTIONS } from "@/lib/ai/options";
 import type { BuilderConfig } from "@/lib/types";
 
@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
   // Si la IA está apagada o no tiene credencial, usa el mock determinista
   // para que el editor siga funcionando y dando contexto.
   const settings = await getAiSettings();
-  if (!isProviderReady(settings)) {
+  if (!settings.enabled) {
     return NextResponse.json(
       { builderConfig, warning: "La IA está apagada. Los cambios se aplican manualmente desde el editor." },
       { status: 200 }
@@ -176,7 +176,7 @@ const systemPrompt = [
   ].join("\n");
 
   try {
-    const result = await chatCompletion(
+    const result = await callAi(
       settings,
       [
         { role: "system", content: systemPrompt },
@@ -192,7 +192,7 @@ const systemPrompt = [
       );
     }
 
-    const json = extractJson(result.raw);
+    const json = result.json;
     if (!json || !json.modules || !json.theme) {
       return NextResponse.json(
         {

@@ -71,6 +71,30 @@ export async function PUT(req: NextRequest) {
   if (incomingKey.includes("•")) delete patch.apiKey;
   if (incomingKey === "") delete patch.apiKey;
 
+  // Si viene la lista de proveedores, desmaskar las claves.
+  const incomingProviders = Array.isArray(patch.aiProviders) ? patch.aiProviders : null;
+  if (incomingProviders) {
+    const current = await getAiSettings();
+    const oldProviders = current.aiProviders ?? [];
+    patch.aiProviders = incomingProviders.map((p: any, i: number) => {
+      const key = typeof p.apiKeyMasked === "string" ? p.apiKeyMasked : "";
+      const old = oldProviders[i];
+      // Si la clave es la máscara o está vacía, conservar la original.
+      if (key.includes("•") || key === "") {
+        return { ...p, apiKey: old?.apiKey ?? "" };
+      }
+      return { ...p, apiKey: key };
+    });
+    // Sincronizar los campos single con el primer proveedor
+    const first = (patch.aiProviders as any[])[0];
+    if (first) {
+      patch.provider = first.provider;
+      patch.apiKey = first.apiKey;
+      patch.model = first.model;
+      patch.baseUrl = first.baseUrl;
+    }
+  }
+
   try {
     const saved = await saveAiSettings(patch, admin);
     const fromEnv = await isApiKeyFromEnv();

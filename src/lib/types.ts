@@ -452,6 +452,15 @@ export interface AiTestResult {
   at: number;
 }
 
+export interface AiProviderConfig {
+  provider: AiProvider;
+  apiKey: string;
+  model: string;
+  baseUrl?: string;
+  enabled: boolean;
+  priority: number; // 0 = mayor prioridad
+}
+
 export interface AiSettings {
   // Interruptor maestro. false = el wizard siempre usa el mock determinista.
   enabled: boolean;
@@ -460,6 +469,12 @@ export interface AiSettings {
   apiKey: string;
   baseUrl: string;
   model: string;
+
+  // Lista de proveedores con prioridad y fallback. Si es no vacía,
+  // callAi intenta cada proveedor en orden de priority hasta obtener
+  // respuesta. Los campos single (provider/apiKey/model/baseUrl) se
+  // derivan de aiProviders[0] para compatibilidad con lo existente.
+  aiProviders?: AiProviderConfig[];
 
   // Parámetros de generación
   temperature: number;   // 0 – 2
@@ -492,6 +507,7 @@ export type AiSettingsPublic = Omit<AiSettings, "apiKey"> & {
   apiKeyMasked: string;
   hasApiKey: boolean;
   apiKeyFromEnv: boolean;
+  aiProviders: Array<AiProviderConfig & { apiKeyMasked: string }>;
 };
 
 // ----------------------------- Banner promocional -----------------------------

@@ -11,7 +11,7 @@ import { getAiSettings } from "@/lib/ai/config";
 import { extractJson } from "@/lib/ai/client";
 import { isUsableBaseUrl, resolveProvider } from "@/lib/ai/providers";
 import { normalizeAiSettings } from "@/lib/ai/config";
-import type { AiSettings, AiTestResult } from "@/lib/types";
+import type { AiSettings, AiTestResult, AiProviderConfig } from "@/lib/types";
 
 export const runtime = "nodejs";
 
@@ -37,7 +37,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "No autorizado" }, { status: 401 });
   }
 
-  // Permite probar una clave/modelo SIN guardarlo antes (opción "probar" del form).
   let body: any = {};
   try {
     body = await req.json();
@@ -46,32 +45,24 @@ export async function POST(req: NextRequest) {
   }
 
   const settings = await getAiSettings();
-  const provider = typeof body.provider === "string" ? body.provider : settings.provider;
+
+  // Si viene providerConfig, se prueba ese proveedor concreto (botón "Probar" de la lista).
+  const providerConfig: AiProviderConfig | undefined = body.providerConfig;
+  const provider = providerConfig?.provider ?? (typeof body.provider === "string" ? body.provider : settings.provider);
   const preset = resolveProvider(provider);
 
-  // Base y modelo propuestos por el preset, para poder probar un proveedor nuevo
-  // sin escribir antes los valores a mano.
   const baseUrl =
-    (typeof body.baseUrl === "string" && body.baseUrl.trim() ? body.baseUrl.trim() : settings.baseUrl) ||
-    preset.baseUrl;
+    (providerConfig?.baseUrl && isUsableBaseUrl(providerConfig.baseUrl))
+      ? providerConfig.baseUrl
+      : ((typeof body.baseUrl === "string" && body.baseUrl.trim() ? body.baseUrl.trim() : settings.baseUrl) || preset.baseUrl);
   const model =
     (typeof body.model === "string" && body.model.trim()) || settings.model || preset.defaultModel;
   const apiKey =
-    typeof body.apiKey === "string" && body.apiKey.trim() && !body.apiKey.includes("•")
+    (typeof body.apiKey === "string" && body.apiKey.trim() && !body.apiKey.includes("•"))
       ? body.apiKey.trim()
-      : settings.apiKey;
+      : (providerConfig?.apiKey ?? settings.apiKey);
 
-  const candidate = normalizeAiSettings(
-    { ...settings, provider: preset.id, baseUrl, model, apiKey },
-    settings
-  ) as AiSettings;
-
-  if (!isUsableBaseUrl(candidate.baseUrl)) {
-    return NextResponse.json(
-      { error: `Base URL inválida. Debe empezar por http:// o https:// y no dejar {account_id} sin reemplazar.` },
-      { status: 400 }
-    );
-  }
+  // Validar: la clave debe estar presente para este proveedor
   if (!apiKey && preset.requiresKey) {
     return NextResponse.json(
       { error: `Falta la API key de ${preset.label}. Escribe una o guárdala antes de probar.` },
@@ -81,13 +72,22 @@ export async function POST(req: NextRequest) {
   if (!model) {
     return NextResponse.json({ error: `Falta el modelo para ${preset.label}.` }, { status: 400 });
   }
+  if (!isUsableBaseUrl(baseUrl)) {
+    return NextResponse.json(
+      { error: `Base URL inválida. Debe empezar por http:// o https:// y no dejar {account_id} sin reemplazar.` },
+      { status: 400 }
+    );
+  }
+
+  const candidate = normalizeAiSettings(
+    { ...settings, provider: preset.id, baseUrl, model, apiKey },
+    settings
+  ) as AiSettings;
 
   const startedAt = Date.now();
   let result: AiTestResult;
 
   try {
-    // Import diferido: el cliente arrastra dependencias de red y no hace falta
-    // para responder los errores de validación de arriba.
     const { chatCompletion } = await import("@/lib/ai/client");
 
     const { raw, latencyMs } = await chatCompletion(
