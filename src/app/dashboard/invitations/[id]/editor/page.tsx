@@ -10,6 +10,7 @@ import type { Invitation, BuilderConfig, InvitationModule } from "@/lib/types";
 import { EditorSidebar } from "@/components/editor/EditorSidebar";
 import { EditorCanvas } from "@/components/editor/EditorCanvas";
 import { EditorPanel } from "@/components/editor/EditorPanel";
+import { AIAssistant } from "@/components/editor/AIAssistant";
 import { cn } from "@/lib/cn";
 
 export default function InvitationEditorPage() {
@@ -129,6 +130,8 @@ export default function InvitationEditorPage() {
 
   return (
     <div className="h-screen flex bg-ink/5">
+        {/* AI Assistant (floating) */}
+        <AIAssistant config={config} setConfig={setConfig} invitationId={id} />
       {/* Sidebar - lista de módulos */}
       <aside className="w-64 bg-white border-r border-ink/10 flex flex-col">
         <div className="p-4 border-b border-ink/10">
