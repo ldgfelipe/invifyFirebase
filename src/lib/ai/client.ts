@@ -15,7 +15,23 @@ export interface ChatResult {
   latencyMs: number;
 }
 
-/** Extrae el primer objeto JSON balanceado de un texto. */
+/**
+ * Normaliza un JSON escrito por un LLM con errores típicos:
+ * 1. Claves con comilla simple tras doble: "key':  → "key":
+ * 2. Comillas simples en claves o valores: 'key' → "key"
+ * 3. Claves sin comillas: {key: v} → {"key": v}
+ */
+function normalizeLlmJson(candidate: string): string {
+  let s = candidate;
+  s = s.replace(/"([^"]*)'\s*:/g, '"$1":');
+  s = s.replace(/'([^']*)'/g, '"$1"');
+  s = s.replace(/([{,]\s*)(\w+)(\s*:)/g, "$1\"$2\"$3");
+  return s;
+}
+
+/** Extrae el primer objeto JSON balanceado de un texto.
+ *  Tolerante a errores típicos de LLMs: comillas simples y claves sin comillas.
+ */
 export function extractJson(content: string): any | null {
   const start = content.indexOf("{");
   if (start === -1) return null;
@@ -25,10 +41,15 @@ export function extractJson(content: string): any | null {
     else if (content[i] === "}") {
       depth--;
       if (depth === 0) {
+        const candidate = content.slice(start, i + 1);
         try {
-          return JSON.parse(content.slice(start, i + 1));
+          return JSON.parse(candidate);
         } catch {
-          return null;
+          try {
+            return JSON.parse(normalizeLlmJson(candidate));
+          } catch {
+            return null;
+          }
         }
       }
     }

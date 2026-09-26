@@ -59,8 +59,8 @@ async function requireValidRequest(req: NextRequest) {
   return { uid, invitationId, builderConfig, message, language };
 }
 
-/** Lista de fondos y estilos que la IA puede usar, organizada por tema. */
-function materialsBlock(category: string) {
+/** Lista de fondos y estilos que la IA puede usar. */
+function materialsBlock() {
   const atmospheres = ATMOSPHERE_OPTIONS.map((a) => {
     const p = a.palette;
     return `  - ${a.id}: fondo ${p.background}, texto ${p.textColor}, primario ${p.primary}, fuente ${p.fontFamily}`;
@@ -110,20 +110,61 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const systemPrompt = [
-    "Eres el asistente de diseño de invitaciones de Invify. Tu ÚNICO trabajo es modificar el JSON de configuración que te doy según lo que pida el usuario.",
-    "",
-    "Reglas estrictas:",
-    "- Responde ÚNICAMENTE con el JSON de BuilderConfig modificado. Sin texto fuera del JSON, sin markdown, sin comentarios, sin explicación.",
-    "- Estructura exacta: { \"modules\": [...], \"theme\": { \"primaryColor\", \"background\", \"textColor\", \"fontFamily\", \"backgroundImage?\", \"backgroundOverlay?\" } }.",
-    "- Los módulos tienen id (string), type (string), visible (boolean), y campos según su tipo.",
-    "- Conserva IDENTICAL todo lo que no se pida modificar. Cambia solo lo pedido.",
-    "- Para imágenes, usa rutas locales con el formato /api/thumb/lock/N (N un entero 1-90) salvo que el usuario pida explícitamente otro recurso.",
-    "- Para colores, usa hexadecimal (#RGB o #RRGGBB).",
-    "- No añadas ni quites módulos salvo que el usuario lo pida de forma explícita.",
-    "- Responde siempre en el idioma del usuario para los textos dentro de los módulos (títulos, contenido).",
-    "",
-    materialsBlock(language === "en" ? "corporativo" : "boda"),
+  const SCHEMA = `## JSON Schema de BuilderConfig (responde SIEMPRE con esta estructura)
+
+\`\`\`json
+{
+  "modules": [
+    {
+      "id": "string (único, no lo cambies salvo que se indique)",
+      "type": "preloader|header|countdown|audio|carousel|location|dresscode|itinerary|giftTable|quiz|rsvp|text",
+      "visible": true,
+      "style": { "background"?, "textColor"?, "backgroundImage"?, "backgroundOverlay"?, "padding"?, "borderRadius"?, "border"?, "textAlign"? },
+      "title": "string",
+      "subtitle": "string",
+      "names": "string",
+      "date": "YYYY-MM-DD",
+      "imageUrl": "string (usa /api/thumb/lock/N)",
+      "text": "string (HTML admitido)",
+      "content": "string (HTML)",
+      "align": "left|center|right|justify",
+      "targetDate": "ISO date",
+      "label": "string",
+      "venue": "string",
+      "address": "string",
+      "lat": number,
+      "lng": number,
+      "mapUrl": "string",
+      "code": "string",
+      "description": "string",
+      "items": [ { "time": "string", "title": "string", "description"?, "name"?, "url"?, "imageUrl"? } ],
+      "src": "string (URL de audio MP3/OGG)",
+      "autoplay": boolean,
+      "images": [ { "url": "string", "caption"?: string } ],
+      "questions": [ { "id": "string", "question": "string", "options": [string] } ],
+      "title": "string",
+      "collectEmail": boolean
+    }
+  ],
+  "theme": {
+    "primaryColor": "#hex",
+    "background": "#hex",
+    "textColor": "#hex",
+    "fontFamily": "serif|sans",
+    "backgroundImage"?: "url",
+    "backgroundOverlay"?: "rgba(r,g,b,a)"
+  }
+}
+\`\`\`
+Reglas: responde ÚNICAMES con ese JSON, sin markdown ni texto extra. Modifica SOBRE el objeto que te doy; conserva todo lo que no se pida.`;
+
+const systemPrompt = [
+  "Eres el asistente de diseño de invitaciones de Invify. Tu ÚNICO trabajo es modificar el JSON de configuración que te doy según lo que pida el usuario.",
+  "",
+  SCHEMA,
+  "",
+  "Material disponible (usa SOLO estas rutas para imágenes y estos fondos):",
+    materialsBlock(),
   ].join("\n");
 
   const userMessage = [
