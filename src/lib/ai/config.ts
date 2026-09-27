@@ -68,10 +68,13 @@ export function normalizeAiSettings(raw: unknown, base: AiSettings = DEFAULT_AI_
         .map((p) => {
           const q = p as Record<string, unknown>;
           const preset = resolveProvider(q.provider);
+          const rawKey = typeof q.apiKey === "string" ? q.apiKey.trim() : "";
           return {
             provider: preset.id,
             // Solo campos conocidos: nunca persistir apiKeyMasked ni lastTest.
-            apiKey: typeof q.apiKey === "string" ? q.apiKey.trim() : "",
+            // Una máscara guardada por error (• o â€¢) no es clave: se vacía
+            // para que el proveedor se salte con un mensaje claro.
+            apiKey: isMaskedApiKey(rawKey) ? "" : rawKey,
             model:
               typeof q.model === "string" && q.model.trim()
                 ? q.model.trim()
@@ -90,10 +93,11 @@ export function normalizeAiSettings(raw: unknown, base: AiSettings = DEFAULT_AI_
     aiProviders = existingProviders.sort((a, b) => a.priority - b.priority);
     aiProviders = aiProviders.map((p, i) => ({ ...p, priority: i }));
   } else {
-    // MigraciÃ³n legacy: un solo proveedor.
+    // Migración legacy: un solo proveedor.
+    const legacyKey = typeof r.apiKey === "string" ? r.apiKey.trim() : base.apiKey;
     aiProviders = [{
       provider,
-      apiKey: typeof r.apiKey === "string" ? r.apiKey.trim() : base.apiKey,
+      apiKey: isMaskedApiKey(legacyKey) ? "" : legacyKey,
       model: str(r.model, base.model),
       baseUrl: str(r.baseUrl, base.baseUrl).replace(/\/+$/, ""),
       enabled: true,
@@ -186,11 +190,22 @@ export async function isApiKeyFromEnv(): Promise<boolean> {
   return !str(stored.apiKey, "");
 }
 
+/** Viñeta real de enmascarado (• U+2022) y resto corrupto histórico (â€¢). */
+export const MASK_BULLET = "•";
+const MASK_BULLET_LEGACY = "â€¢";
+
+/** Indica si un valor es (o parece) una máscara en vez de una clave real. */
+export function isMaskedApiKey(value: unknown): boolean {
+  if (typeof value !== "string" || !value) return false;
+  return value.includes(MASK_BULLET) || value.includes(MASK_BULLET_LEGACY);
+}
+
 /** Enmascara una clave para poder mostrarla sin exponerla. */
 export function maskApiKey(key: string): string {
   if (!key) return "";
-  if (key.length <= 11) return "â€¢".repeat(key.length);
-  return `${key.slice(0, 6)}${"â€¢".repeat(8)}${key.slice(-4)}`;
+  if (isMaskedApiKey(key)) return "";
+  if (key.length <= 11) return MASK_BULLET.repeat(key.length);
+  return `${key.slice(0, 6)}${MASK_BULLET.repeat(8)}${key.slice(-4)}`;
 }
 
 /** Enmascara las claves de cada proveedor de la lista (sin exponer apiKey). */

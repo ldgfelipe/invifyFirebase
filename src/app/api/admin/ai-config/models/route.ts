@@ -7,7 +7,7 @@
 // ============================================================================
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
-import { getAiSettings } from "@/lib/ai/config";
+import { getAiSettings, isMaskedApiKey } from "@/lib/ai/config";
 import { listModels } from "@/lib/ai/client";
 import { isUsableBaseUrl, resolveProvider } from "@/lib/ai/providers";
 
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     (typeof body.baseUrl === "string" && body.baseUrl.trim() ? body.baseUrl.trim() : settings.baseUrl) ||
     preset.baseUrl;
   const apiKey =
-    typeof body.apiKey === "string" && body.apiKey.trim() && !body.apiKey.includes("•")
+    typeof body.apiKey === "string" && body.apiKey.trim() && !isMaskedApiKey(body.apiKey)
       ? body.apiKey.trim()
       : settings.apiKey;
 

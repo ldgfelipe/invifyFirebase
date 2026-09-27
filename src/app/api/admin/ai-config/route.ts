@@ -11,6 +11,7 @@ import { log } from "@/lib/logging";
 import {
   getAiSettings,
   isApiKeyFromEnv,
+  isMaskedApiKey,
   saveAiSettings,
   toPublicSettings,
 } from "@/lib/ai/config";
@@ -71,7 +72,7 @@ export async function PUT(req: NextRequest) {
   // colado al pegar): reventarían el header Authorization con un error opaco.
   const hasBadChars = (s: string) => /[^\x20-\x7E]/.test(s);
   const incomingKey = typeof patch.apiKey === "string" ? patch.apiKey.trim() : "";
-  if (incomingKey.includes("•")) delete patch.apiKey;
+  if (isMaskedApiKey(incomingKey)) delete patch.apiKey;
   if (incomingKey === "") delete patch.apiKey;
   if (typeof patch.apiKey === "string" && hasBadChars(patch.apiKey)) {
     return NextResponse.json(
@@ -98,7 +99,7 @@ export async function PUT(req: NextRequest) {
       ) ?? oldProviders.find((o) => o.provider === provider);
     for (const p of incomingProviders as any[]) {
       const key = typeof p?.apiKeyMasked === "string" ? p.apiKeyMasked : "";
-      if (key && !key.includes("•") && /[^\x20-\x7E]/.test(key)) {
+      if (key && !isMaskedApiKey(key) && /[^\x20-\x7E]/.test(key)) {
         return NextResponse.json(
           {
             error: `La API key de "${p?.provider ?? "?"} contiene un carácter no válido. Bórrala y pégala de nuevo (solo ASCII).`,
@@ -111,7 +112,7 @@ export async function PUT(req: NextRequest) {
       const key = typeof p.apiKeyMasked === "string" ? p.apiKeyMasked : "";
       const old = findOld(p.provider, p.model);
       // Si la clave es la máscara o está vacía, conservar la original.
-      const apiKey = key.includes("•") || key === "" ? (old?.apiKey ?? "") : key;
+      const apiKey = isMaskedApiKey(key) || key === "" ? (old?.apiKey ?? "") : key;
       return {
         provider: p.provider,
         model: typeof p.model === "string" ? p.model : "",

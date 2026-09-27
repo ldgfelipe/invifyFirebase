@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { getAiSettings } from "@/lib/ai/config";
+import { isMaskedApiKey } from "@/lib/ai/config";
 import { extractJson } from "@/lib/ai/client";
 import { isKnownProvider, isUsableBaseUrl, resolveProvider } from "@/lib/ai/providers";
 import { normalizeAiSettings } from "@/lib/ai/config";
@@ -76,9 +77,13 @@ export async function POST(req: NextRequest) {
     (typeof body.apiKey === "string" && body.apiKey.trim()) ||
     (typeof providerConfig?.apiKey === "string" ? (providerConfig.apiKey as string).trim() : "");
   const apiKey =
-    rawKey && !rawKey.includes("•")
+    rawKey && !isMaskedApiKey(rawKey)
       ? rawKey
-      : (savedMatch?.apiKey ?? (providerConfig ? "" : settings.apiKey));
+      : (savedMatch?.apiKey && !isMaskedApiKey(savedMatch.apiKey)
+          ? savedMatch.apiKey
+          : providerConfig
+            ? ""
+            : settings.apiKey);
 
   const baseUrlRaw = providerConfig
     ? (typeof providerConfig.baseUrl === "string" && (providerConfig.baseUrl as string).trim()) ||
@@ -94,8 +99,13 @@ export async function POST(req: NextRequest) {
 
   // Validar: la clave debe estar presente para este proveedor
   if (!apiKey && preset.requiresKey) {
+    const storedBroken = savedMatch?.apiKey ? isMaskedApiKey(savedMatch.apiKey) : false;
     return NextResponse.json(
-      { error: `Falta la API key de ${preset.label}. Escribe una o guárdala antes de probar.` },
+      {
+        error: storedBroken
+          ? `La clave guardada de ${preset.label} parece una máscara corrupta, no una clave real. Borra el campo y escribe la clave de nuevo, guarda y vuelve a probar.`
+          : `Falta la API key de ${preset.label}. Escribe una o guárdala antes de probar.`,
+      },
       { status: 400 }
     );
   }
