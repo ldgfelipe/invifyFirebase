@@ -72,18 +72,31 @@ export async function PUT(req: NextRequest) {
   if (incomingKey === "") delete patch.apiKey;
 
   // Si viene la lista de proveedores, desmaskar las claves.
+  // Se empareja con lo guardado por proveedor (+modelo), NO por índice: la
+  // lista pudo reordenarse con los botones de prioridad.
   const incomingProviders = Array.isArray(patch.aiProviders) ? patch.aiProviders : null;
   if (incomingProviders) {
     const current = await getAiSettings();
     const oldProviders = current.aiProviders ?? [];
+    const findOld = (provider: unknown, model: unknown) =>
+      oldProviders.find(
+        (o) =>
+          o.provider === provider &&
+          (typeof model === "string" && model.trim() ? o.model === model.trim() : true)
+      ) ?? oldProviders.find((o) => o.provider === provider);
     patch.aiProviders = incomingProviders.map((p: any, i: number) => {
       const key = typeof p.apiKeyMasked === "string" ? p.apiKeyMasked : "";
-      const old = oldProviders[i];
+      const old = findOld(p.provider, p.model);
       // Si la clave es la máscara o está vacía, conservar la original.
-      if (key.includes("•") || key === "") {
-        return { ...p, apiKey: old?.apiKey ?? "" };
-      }
-      return { ...p, apiKey: key };
+      const apiKey = key.includes("•") || key === "" ? (old?.apiKey ?? "") : key;
+      return {
+        provider: p.provider,
+        model: typeof p.model === "string" ? p.model : "",
+        baseUrl: typeof p.baseUrl === "string" ? p.baseUrl : "",
+        enabled: p.enabled !== false,
+        priority: i,
+        apiKey,
+      };
     });
     // Sincronizar los campos single con el primer proveedor
     const first = (patch.aiProviders as any[])[0];

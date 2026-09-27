@@ -8,7 +8,7 @@
 // ============================================================================
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
-import { callAi, getAiSettings, isProviderReady } from "@/lib/ai/config";
+import { callAi, getAiSettings, isAnyProviderReady } from "@/lib/ai/config";
 import {
   buildAIPrompt,
   buildMockTemplate,
@@ -51,9 +51,9 @@ async function overDailyLimit(limit: number): Promise<{ used: number; limit: num
 
 export async function POST(req: NextRequest) {
   const settings = await getAiSettings();
-  // isProviderReady valida provider + base + modelo + credencial según el
-  // preset, de modo que un servidor local sin clave también funciona.
-  const willCallAi = isProviderReady(settings);
+  // isAnyProviderReady recorre la lista con fallback: basta que UN proveedor
+  // activo tenga clave, base y modelo válidos para intentar la IA real.
+  const willCallAi = isAnyProviderReady(settings);
 
   if (willCallAi) {
     const capped = await overDailyLimit(settings.maxGenerationsPerDay);

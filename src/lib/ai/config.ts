@@ -63,9 +63,25 @@ export function normalizeAiSettings(raw: unknown, base: AiSettings = DEFAULT_AI_
   const imageSource = r.imageSource === "picsum" ? "picsum" : "local";
 
   const existingProviders: AiProviderConfig[] = Array.isArray(r.aiProviders)
-    ? (r.aiProviders as AiProviderConfig[]).filter(
-        (p: AiProviderConfig) => p && isKnownProvider(p.provider)
-      )
+    ? (r.aiProviders as Array<Record<string, unknown>>)
+        .filter((p) => p && isKnownProvider((p as Record<string, unknown>).provider))
+        .map((p) => {
+          const q = p as Record<string, unknown>;
+          const preset = resolveProvider(q.provider);
+          return {
+            provider: preset.id,
+            // Solo campos conocidos: nunca persistir apiKeyMasked ni lastTest.
+            apiKey: typeof q.apiKey === "string" ? q.apiKey.trim() : "",
+            model:
+              typeof q.model === "string" && q.model.trim()
+                ? q.model.trim()
+                : preset.defaultModel,
+            baseUrl:
+              typeof q.baseUrl === "string" ? q.baseUrl.trim().replace(/\/+$/, "") : "",
+            enabled: q.enabled !== false,
+            priority: Number.isFinite(Number(q.priority)) ? Number(q.priority) : 0,
+          };
+        })
     : [];
 
   let aiProviders: AiProviderConfig[];
@@ -177,9 +193,18 @@ export function maskApiKey(key: string): string {
   return `${key.slice(0, 6)}${"â€¢".repeat(8)}${key.slice(-4)}`;
 }
 
-/** Enmascara las claves de cada proveedor de la lista. */
-function maskProviders(providers: AiProviderConfig[]): Array<AiProviderConfig & { apiKeyMasked: string }> {
-  return providers.map((p) => ({ ...p, apiKeyMasked: maskApiKey(p.apiKey) }));
+/** Enmascara las claves de cada proveedor de la lista (sin exponer apiKey). */
+function maskProviders(
+  providers: AiProviderConfig[]
+): Array<Omit<AiProviderConfig, "apiKey"> & { apiKeyMasked: string }> {
+  return providers.map((p) => ({
+    provider: p.provider,
+    model: p.model,
+    baseUrl: p.baseUrl ?? "",
+    enabled: p.enabled !== false,
+    priority: p.priority,
+    apiKeyMasked: maskApiKey(p.apiKey),
+  }));
 }
 
 /** Proyecta la config a la vista pÃºblica (sin la clave en claro). */
@@ -187,13 +212,13 @@ export function toPublicSettings(
   settings: AiSettings,
   opts: { apiKeyFromEnv?: boolean } = {}
 ): AiSettingsPublic {
-  const { apiKey, ...rest } = settings;
+  const { apiKey, aiProviders, ...rest } = settings;
   return {
     ...rest,
     apiKeyMasked: maskApiKey(apiKey),
     hasApiKey: Boolean(apiKey),
     apiKeyFromEnv: Boolean(opts.apiKeyFromEnv),
-    aiProviders: maskProviders(settings.aiProviders || []),
+    aiProviders: maskProviders(aiProviders || []),
   };
 }
 
@@ -225,8 +250,31 @@ export async function saveAiSettings(
 }
 
 /**
+  * Indica si hay al menos un proveedor activo listo para llamar (clave, base y
+  * modelo válidos según su preset). A diferencia de isProviderReady —que solo
+  * mira el proveedor principal—, este recorre toda la lista con fallback.
+  */
+export function isAnyProviderReady(settings: AiSettings): boolean {
+  if (!settings.enabled) return false;
+  const list = (settings.aiProviders ?? []).filter((p) => p.enabled !== false);
+  if (list.length > 0) {
+    return list.some((p) =>
+      isProviderReady({
+        ...settings,
+        provider: p.provider,
+        apiKey: p.apiKey,
+        model: p.model,
+        baseUrl: p.baseUrl || resolveProvider(p.provider).baseUrl,
+      })
+    );
+  }
+  return isProviderReady(settings);
+}
+
+/**
   * Llama al proveedor con mayor prioridad; si falla, intenta con los
-  * siguientes en orden. Devuelve null si todos fallan o la IA estÃ¡ apagada.
+  * siguientes en orden. Solo intenta los marcados como activos.
+  * Devuelve null si todos fallan o la IA está apagada.
   */
 export async function callAi(
   settings: AiSettings,
@@ -234,9 +282,11 @@ export async function callAi(
   opts?: { timeoutMs?: number; forceJson?: boolean }
 ): Promise<{ json: any; raw: string; latencyMs: number } | null> {
   if (!settings.enabled) return null;
-  const providers = (settings.aiProviders ?? []).length > 0
-    ? [...(settings.aiProviders ?? [])].sort((a, b) => a.priority - b.priority)
-    : null;
+  const enabledProviders = (settings.aiProviders ?? []).filter((p) => p.enabled !== false);
+  const providers =
+    enabledProviders.length > 0
+      ? [...enabledProviders].sort((a, b) => a.priority - b.priority)
+      : null;
 
   const attempts = providers || [
     { provider: settings.provider, apiKey: settings.apiKey, model: settings.model, baseUrl: settings.baseUrl },

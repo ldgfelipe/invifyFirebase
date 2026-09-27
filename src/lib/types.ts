@@ -503,11 +503,12 @@ export interface AiSettings {
 }
 
 /** Vista pública de la config: la apiKey viene enmascarada. */
-export type AiSettingsPublic = Omit<AiSettings, "apiKey"> & {
+export type AiSettingsPublic = Omit<AiSettings, "apiKey" | "aiProviders"> & {
   apiKeyMasked: string;
   hasApiKey: boolean;
   apiKeyFromEnv: boolean;
-  aiProviders: Array<AiProviderConfig & { apiKeyMasked: string }>;
+  // Sin apiKey en claro ni siquiera anidada: solo la máscara.
+  aiProviders: Array<Omit<AiProviderConfig, "apiKey"> & { apiKeyMasked: string }>;
 };
 
 // ----------------------------- Banner promocional -----------------------------

@@ -187,7 +187,10 @@ const systemPrompt = [
 
     if (!result) {
       return NextResponse.json(
-        { error: "La IA no respondió. Intenta de nuevo." },
+        {
+          error:
+            "Ningún proveedor de IA respondió. Revisa en Admin → Asistente IA que haya al menos un proveedor activo, con su API key guardada y la conexión probada (botón Probar).",
+        },
         { status: 503 }
       );
     }

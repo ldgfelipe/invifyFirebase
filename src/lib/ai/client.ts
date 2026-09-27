@@ -186,9 +186,10 @@ async function chatOpenAi(
     try {
       data = await send(wantsJson);
     } catch (err: any) {
-      // Algunos proveedores compatibles no aceptan response_format y responden
-      // 400. Se reintenta sin él antes de rendirse.
-      const canRetry = err?.status === 400 && wantsJson && String(err?.message).includes("response_format");
+      // Algunos proveedores compatibles (p. ej. Cloudflare Workers AI) no
+      // aceptan response_format y responden 400 con mensajes variados. Se
+      // reintenta sin él antes de rendirse.
+      const canRetry = err?.status === 400 && wantsJson;
       if (!canRetry) throw err;
       data = await send(false);
     }

@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { getAiSettings } from "@/lib/ai/config";
 import { extractJson } from "@/lib/ai/client";
-import { isUsableBaseUrl, resolveProvider } from "@/lib/ai/providers";
+import { isKnownProvider, isUsableBaseUrl, resolveProvider } from "@/lib/ai/providers";
 import { normalizeAiSettings } from "@/lib/ai/config";
 import type { AiSettings, AiTestResult, AiProviderConfig } from "@/lib/types";
 
@@ -47,20 +47,50 @@ export async function POST(req: NextRequest) {
   const settings = await getAiSettings();
 
   // Si viene providerConfig, se prueba ese proveedor concreto (botón "Probar" de la lista).
-  const providerConfig: AiProviderConfig | undefined = body.providerConfig;
-  const provider = providerConfig?.provider ?? (typeof body.provider === "string" ? body.provider : settings.provider);
+  const providerConfig = (body.providerConfig ?? null) as {
+    provider?: unknown;
+    apiKey?: unknown;
+    baseUrl?: unknown;
+    model?: unknown;
+  } | null;
+  const provider =
+    (providerConfig && isKnownProvider(providerConfig.provider)
+      ? (providerConfig.provider as AiProviderConfig["provider"])
+      : null) ??
+    (typeof body.provider === "string" ? body.provider : settings.provider);
   const preset = resolveProvider(provider);
 
-  const baseUrl =
-    (providerConfig?.baseUrl && isUsableBaseUrl(providerConfig.baseUrl))
-      ? providerConfig.baseUrl
-      : ((typeof body.baseUrl === "string" && body.baseUrl.trim() ? body.baseUrl.trim() : settings.baseUrl) || preset.baseUrl);
-  const model =
-    (typeof body.model === "string" && body.model.trim()) || settings.model || preset.defaultModel;
+  // La clave guardada nunca viaja al navegador: el panel envía la máscara.
+  // Si llega máscara (o vacío), se recupera la clave real del proveedor
+  // guardado con el mismo id (y modelo si hay varios del mismo proveedor).
+  const savedList = settings.aiProviders ?? [];
+  const savedMatch =
+    savedList.find(
+      (p) =>
+        p.provider === preset.id &&
+        (typeof providerConfig?.model === "string" && providerConfig.model.trim()
+          ? p.model === (providerConfig.model as string).trim()
+          : true)
+    ) ?? savedList.find((p) => p.provider === preset.id);
+  const rawKey =
+    (typeof body.apiKey === "string" && body.apiKey.trim()) ||
+    (typeof providerConfig?.apiKey === "string" ? (providerConfig.apiKey as string).trim() : "");
   const apiKey =
-    (typeof body.apiKey === "string" && body.apiKey.trim() && !body.apiKey.includes("•"))
-      ? body.apiKey.trim()
-      : (providerConfig?.apiKey ?? settings.apiKey);
+    rawKey && !rawKey.includes("•")
+      ? rawKey
+      : (savedMatch?.apiKey ?? (providerConfig ? "" : settings.apiKey));
+
+  const baseUrlRaw = providerConfig
+    ? (typeof providerConfig.baseUrl === "string" && (providerConfig.baseUrl as string).trim()) ||
+      savedMatch?.baseUrl ||
+      ""
+    : (typeof body.baseUrl === "string" && body.baseUrl.trim()) || settings.baseUrl;
+  const baseUrl = baseUrlRaw || preset.baseUrl;
+  const model = providerConfig
+    ? (typeof providerConfig.model === "string" && (providerConfig.model as string).trim()) ||
+      savedMatch?.model ||
+      preset.defaultModel
+    : (typeof body.model === "string" && body.model.trim()) || settings.model || preset.defaultModel;
 
   // Validar: la clave debe estar presente para este proveedor
   if (!apiKey && preset.requiresKey) {
