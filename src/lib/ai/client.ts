@@ -145,7 +145,7 @@ const truncate = (s: string, n = 300) => s.slice(0, n);
  * que no dice nada útil. Es un error de tecleo fácil de cometer.
  */
 const ENDPOINT_SUFFIX =
-  /\/(chat\/completions|completions|responses|messages|embeddings|models|generateContent)$/i;
+  /\/(chat\/completions|completions|responses|messages|embeddings|models|generateContent|run)$/i;
 
 export function baseUrlLooksComplete(baseUrl: string): string | null {
   try {
