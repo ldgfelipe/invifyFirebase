@@ -121,48 +121,44 @@ export async function POST(req: NextRequest) {
       preset.defaultModel
     : (typeof body.model === "string" && body.model.trim()) || settings.model || preset.defaultModel;
 
+  // Los rechazos de validación también se guardan como último test: así el
+  // cuadro del panel muestra el motivo actual con hora fresca, no un dato rancio.
+  const fail = async (error: string) => {
+    const result: AiTestResult = { ok: false, model, at: Date.now(), message: error };
+    await adminDb.collection("aiConfig").doc("global").set({ lastTest: result }, { merge: true });
+    return NextResponse.json({ error }, { status: 400 });
+  };
+
   // Validar: la clave debe estar presente para este proveedor
   if (!apiKey && preset.requiresKey) {
     const storedBroken = savedMatch?.apiKey ? isMaskedApiKey(savedMatch.apiKey) : false;
-    return NextResponse.json(
-      {
-        error: storedBroken
-          ? `La clave guardada de ${preset.label} parece una máscara corrupta, no una clave real. Borra el campo y escribe la clave de nuevo, guarda y vuelve a probar.`
-          : `Falta la API key de ${preset.label}. Escribe una o guárdala antes de probar.`,
-      },
-      { status: 400 }
+    return fail(
+      storedBroken
+        ? `La clave guardada de ${preset.label} parece una máscara corrupta, no una clave real. Borra el campo y escribe la clave de nuevo, guarda y vuelve a probar.`
+        : `Falta la API key de ${preset.label}. Escribe una o guárdala antes de probar.`
     );
   }
   if (apiKey && /[^\x20-\x7E]/.test(apiKey)) {
     const bad = apiKey.match(/[^\x20-\x7E]/)?.[0] ?? "?";
-    return NextResponse.json(
-      {
-        error:
-          `La API key de ${preset.label} contiene un carácter no válido ("${bad}"). ` +
-          `Borra el campo de la clave y pégala de nuevo con cuidado (las claves solo usan ASCII).`,
-      },
-      { status: 400 }
+    return fail(
+      `La API key de ${preset.label} contiene un carácter no válido ("${bad}"). ` +
+        `Borra el campo de la clave y pégala de nuevo con cuidado (las claves solo usan ASCII).`
     );
   }
   if (!model) {
-    return NextResponse.json({ error: `Falta el modelo para ${preset.label}.` }, { status: 400 });
+    return fail(`Falta el modelo para ${preset.label}.`);
   }
   // Workers AI solo sirve sus propios modelos (@cf/… o @hf/…). Un id de otro
   // formato (p. ej. "anthropic/claude-…") fallaría igual después del auth.
   if (preset.id === "cloudflare" && !/^@(cf|hf)\//.test(model)) {
-    return NextResponse.json(
-      {
-        error:
-          `"${model}" no es un modelo de Cloudflare Workers AI. Usa uno del catálogo @cf/, ` +
-          `p. ej. "@cf/meta/llama-3.3-70b-instruct-fp8-fast". (Los ids tipo "anthropic/…" son de OpenRouter, no de Cloudflare.)`,
-      },
-      { status: 400 }
+    return fail(
+      `"${model}" no es un modelo de Cloudflare Workers AI. Usa uno del catálogo @cf/, ` +
+        `p. ej. "@cf/meta/llama-3.3-70b-instruct-fp8-fast". (Los ids tipo "anthropic/…" son de OpenRouter, no de Cloudflare.)`
     );
   }
   if (!isUsableBaseUrl(baseUrl)) {
-    return NextResponse.json(
-      { error: `Base URL inválida. Debe empezar por http:// o https:// y no dejar {account_id} sin reemplazar.` },
-      { status: 400 }
+    return fail(
+      `Base URL inválida. Debe empezar por http:// o https:// y no dejar {account_id} sin reemplazar.`
     );
   }
 

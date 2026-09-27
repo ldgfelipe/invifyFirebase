@@ -21,6 +21,10 @@ type FormState = Omit<AiSettingsPublic, "lastTest" | "updatedAt" | "updatedBy"> 
   apiKey: string;
 };
 
+/** El valor es una máscara (• actual o resto â€¢ legacy), no una clave real. */
+const looksMasked = (v: string) =>
+  v.includes("•") || v.includes("â€¢");
+
 const EMPTY: FormState = {
   enabled: false,
   provider: "openai",
@@ -244,9 +248,11 @@ export default function AdminAiSettingsPage() {
         next.set(idx, data.result);
         return next;
       });
+      setLastTest(data.result);
       setMsg(data.result.ok ? `Conexión verificada con ${p.provider}.` : `Falló con ${p.provider}.`);
     } catch (e: any) {
       setErr(e.message);
+      setLastTest({ ok: false, model: p.model, at: Date.now(), message: e.message });
     } finally {
       setTestingProviderIdx(null);
     }
@@ -446,13 +452,27 @@ export default function AdminAiSettingsPage() {
                          type="password"
                          className="input text-sm"
                          value={(p as any).apiKeyMasked}
+                         onFocus={(e) => {
+                           // La máscara es solo visual: al enfocar se vacía para que lo
+                           // que se pegue/escriba sea una clave nueva completa.
+                           if (looksMasked(e.target.value)) {
+                             const next = [...form.aiProviders];
+                             next[idx] = { ...next[idx], apiKeyMasked: "" };
+                             setForm((f) => ({ ...f, aiProviders: next as any }));
+                           }
+                         }}
                          onChange={(e) => {
                            const next = [...form.aiProviders];
                            next[idx] = { ...next[idx], apiKeyMasked: e.target.value };
                            setForm((f) => ({ ...f, aiProviders: next as any }));
                          }}
                          placeholder={(p as any).apiKeyMasked ? "••••••••••" : preset?.requiresKey ? "API key…" : "No requiere"}
-                      />
+                       />
+                       <p className="text-xs text-ink/50 mt-1">
+                         {(p as any).apiKeyMasked
+                           ? "Clave guardada (oculta). Clic para vaciar y pegar una nueva, luego Guarda."
+                           : "Pega la clave y pulsa Guarda."}
+                       </p>
                     </div>
                     {preset?.note && (
                       <p className="text-xs text-amber-700/90 bg-amber-50 border border-amber-200 rounded px-2 py-1 self-start">
