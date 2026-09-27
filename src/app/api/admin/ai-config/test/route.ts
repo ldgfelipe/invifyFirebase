@@ -32,6 +32,30 @@ async function requireAdmin(req: NextRequest): Promise<{ uid: string; email: str
 const TEST_PROMPT =
   'Responde únicamente con este JSON: {"ok":true,"message":"conexion_ok"}';
 
+/** Traduce un fallo HTTP en causa probable + acción, con el proveedor al frente. */
+function friendlyTestError(preset: { id: string; label: string }, err: any): string {
+  const head = `${preset.label}: `;
+  if (err?.name === "AbortError") return `${head}Timeout: el proveedor tardó más de 25 s.`;
+  const status = err?.status as number | undefined;
+  const detail = String(err?.message ?? "desconocido");
+  if (status === 401) {
+    return preset.id === "cloudflare"
+      ? `${head}Cloudflare rechazó el token (Authentication error). Revisa: 1) que sea un API Token de cuenta (no la Global API Key), ` +
+        `2) que el {account_id} de la Base URL sea de la misma cuenta del token, 3) que el token tenga permiso sobre Workers AI.`
+      : `${head}Credencial rechazada (401). La clave es inválida, está revocada o es de otro proyecto. Pégala de nuevo y guarda.`;
+  }
+  if (status === 403) {
+    return `${head}Sin permiso (403). La clave es válida pero no tiene acceso a ese modelo o cuenta. Detalle: ${detail.slice(0, 200)}`;
+  }
+  if (status === 404) {
+    return `${head}No encontrado (404). Revisa la Base URL (sin endpoint al final) y que el modelo exista en ese proveedor. Detalle: ${detail.slice(0, 200)}`;
+  }
+  if (status === 429) {
+    return `${head}Cuota agotada (429, sin tokens o demasiadas peticiones). En uso real el sistema pasa solo al siguiente proveedor de la lista. Detalle: ${detail.slice(0, 200)}`;
+  }
+  return `${head}Error: ${detail.slice(0, 300)}`;
+}
+
 export async function POST(req: NextRequest) {
   const admin = await requireAdmin(req);
   if (!admin) {
@@ -123,6 +147,18 @@ export async function POST(req: NextRequest) {
   if (!model) {
     return NextResponse.json({ error: `Falta el modelo para ${preset.label}.` }, { status: 400 });
   }
+  // Workers AI solo sirve sus propios modelos (@cf/… o @hf/…). Un id de otro
+  // formato (p. ej. "anthropic/claude-…") fallaría igual después del auth.
+  if (preset.id === "cloudflare" && !/^@(cf|hf)\//.test(model)) {
+    return NextResponse.json(
+      {
+        error:
+          `"${model}" no es un modelo de Cloudflare Workers AI. Usa uno del catálogo @cf/, ` +
+          `p. ej. "@cf/meta/llama-3.3-70b-instruct-fp8-fast". (Los ids tipo "anthropic/…" son de OpenRouter, no de Cloudflare.)`,
+      },
+      { status: 400 }
+    );
+  }
   if (!isUsableBaseUrl(baseUrl)) {
     return NextResponse.json(
       { error: `Base URL inválida. Debe empezar por http:// o https:// y no dejar {account_id} sin reemplazar.` },
@@ -163,10 +199,7 @@ export async function POST(req: NextRequest) {
       model,
       latencyMs: Date.now() - startedAt,
       at: Date.now(),
-      message:
-        err?.name === "AbortError"
-          ? "Timeout: el proveedor tardó más de 25 s."
-          : `Error: ${err?.message ?? "desconocido"}`,
+      message: friendlyTestError(preset, err),
     };
   }
 
