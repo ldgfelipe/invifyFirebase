@@ -328,6 +328,12 @@ export default function AdminAiSettingsPage() {
               se intenta la siguiente. Arrastra (sube/baja) para cambiar prioridad.
             </p>
 
+            {form.aiProviders.length === 0 && (
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                Sin proveedores configurados: la IA trabaja en modo local (mock) hasta que agregues uno y su prueba dé verde.
+              </p>
+            )}
+
             {(form.aiProviders ?? []).map((p, idx) => {
               const preset = resolveProvider(p.provider as any);
               return (

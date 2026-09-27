@@ -5,6 +5,7 @@
 // lee en claro. El cliente recibe siempre una versiÃ³n enmascarada.
 // ============================================================================
 import { adminDb } from "@/lib/firebase/admin";
+import { FieldValue } from "firebase-admin/firestore";
 import type { AiProviderConfig, AiSettings, AiSettingsPublic } from "@/lib/types";
 import { isKnownProvider, resolveProvider } from "./providers";
 import { chatCompletion, isProviderReady, type ChatMessage } from "./client";
@@ -88,10 +89,11 @@ export function normalizeAiSettings(raw: unknown, base: AiSettings = DEFAULT_AI_
     : [];
 
   let aiProviders: AiProviderConfig[];
-  if (existingProviders.length > 0) {
-    // Ordenar por priority y re-numerar
-    aiProviders = existingProviders.sort((a, b) => a.priority - b.priority);
-    aiProviders = aiProviders.map((p, i) => ({ ...p, priority: i }));
+  if (Array.isArray(r.aiProviders)) {
+    // Lista explícita (aunque esté vacía: el admin eliminó todo).
+    aiProviders = [...existingProviders]
+      .sort((a, b) => a.priority - b.priority)
+      .map((p, i) => ({ ...p, priority: i }));
   } else {
     // Migración legacy: un solo proveedor.
     const legacyKey = typeof r.apiKey === "string" ? r.apiKey.trim() : base.apiKey;
@@ -109,10 +111,10 @@ export function normalizeAiSettings(raw: unknown, base: AiSettings = DEFAULT_AI_
 
   return {
     enabled: bool(r.enabled, base.enabled),
-    provider: first.provider,
-    apiKey: first.apiKey,
-    baseUrl: first.baseUrl || resolveProvider(first.provider).baseUrl,
-    model: first.model,
+    provider: first?.provider ?? base.provider,
+    apiKey: first?.apiKey ?? "",
+    baseUrl: first ? first.baseUrl || resolveProvider(first.provider).baseUrl : "",
+    model: first?.model ?? "",
     aiProviders,
     temperature: clamp(r.temperature, 0, 2, base.temperature),
     maxTokens: Math.round(clamp(r.maxTokens, 64, 16000, base.maxTokens)),
@@ -256,10 +258,19 @@ export async function saveAiSettings(
     next.baseUrl = first.baseUrl || resolveProvider(first.provider).baseUrl;
   }
 
+  const data: Record<string, unknown> = { ...next, defaultNames_en: next.defaultNamesEn };
+  if ((patch as Record<string, unknown>)?.aiProviders !== undefined) {
+    // La lista cambió (o se vació): el último test es de otra configuración.
+    data.lastTest = FieldValue.delete();
+    next.lastTest = undefined;
+  } else if (data.lastTest === undefined) {
+    delete data.lastTest;
+  }
+
   await adminDb
     .collection(DOC_PATH.collection)
     .doc(DOC_PATH.docId)
-    .set({ ...next, defaultNames_en: next.defaultNamesEn }, { merge: true });
+    .set(data, { merge: true });
 
   return next;
 }

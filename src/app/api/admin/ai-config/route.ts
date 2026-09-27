@@ -129,6 +129,12 @@ export async function PUT(req: NextRequest) {
       patch.apiKey = first.apiKey;
       patch.model = first.model;
       patch.baseUrl = first.baseUrl;
+    } else {
+      // Lista vaciada a propósito: soltar los singles viejos para que nada resucite.
+      delete patch.provider;
+      delete patch.apiKey;
+      delete patch.model;
+      delete patch.baseUrl;
     }
   }
 
