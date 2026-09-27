@@ -67,9 +67,21 @@ export async function PUT(req: NextRequest) {
 
   // El input de la clave llega enmascarado: solo se reemplaza si el admin
   // escribe algo que NO sea la máscara (o si lo deja vacío a propósito).
+  // Además se rechazan claves nuevas con caracteres fuera de ASCII (p. ej. €
+  // colado al pegar): reventarían el header Authorization con un error opaco.
+  const hasBadChars = (s: string) => /[^\x20-\x7E]/.test(s);
   const incomingKey = typeof patch.apiKey === "string" ? patch.apiKey.trim() : "";
   if (incomingKey.includes("•")) delete patch.apiKey;
   if (incomingKey === "") delete patch.apiKey;
+  if (typeof patch.apiKey === "string" && hasBadChars(patch.apiKey)) {
+    return NextResponse.json(
+      {
+        error:
+          "La API key nueva contiene un carácter no válido. Bórrala y pégala de nuevo con cuidado (las claves solo usan ASCII).",
+      },
+      { status: 400 }
+    );
+  }
 
   // Si viene la lista de proveedores, desmaskar las claves.
   // Se empareja con lo guardado por proveedor (+modelo), NO por índice: la
@@ -84,6 +96,17 @@ export async function PUT(req: NextRequest) {
           o.provider === provider &&
           (typeof model === "string" && model.trim() ? o.model === model.trim() : true)
       ) ?? oldProviders.find((o) => o.provider === provider);
+    for (const p of incomingProviders as any[]) {
+      const key = typeof p?.apiKeyMasked === "string" ? p.apiKeyMasked : "";
+      if (key && !key.includes("•") && /[^\x20-\x7E]/.test(key)) {
+        return NextResponse.json(
+          {
+            error: `La API key de "${p?.provider ?? "?"} contiene un carácter no válido. Bórrala y pégala de nuevo (solo ASCII).`,
+          },
+          { status: 400 }
+        );
+      }
+    }
     patch.aiProviders = incomingProviders.map((p: any, i: number) => {
       const key = typeof p.apiKeyMasked === "string" ? p.apiKeyMasked : "";
       const old = findOld(p.provider, p.model);

@@ -108,6 +108,25 @@ function fallbackExtract(raw: string): any | null {
   }
 }
 
+/** Limpia caracteres invisibles que se cuelan al pegar (cero-width, BOM). */
+export function cleanApiKey(key: string): string {
+  return key.replace(/[\u200B-\u200F\uFEFF\u00A0]/g, "").trim();
+}
+
+/**
+ * Las credenciales viajan en headers HTTP, que solo admiten Latin-1. Un
+ * carácter como € (U+20AC) hace que fetch lance "Cannot convert argument to
+ * a ByteString...". Se valida antes para dar un mensaje útil en vez de ese.
+ */
+export function assertHeaderSafe(value: string, label: string): void {
+  const bad = value.match(/[^\x20-\x7E]/);
+  if (bad) {
+    throw new Error(
+      `${label} contiene un carácter no válido ("${bad[0]}"). ` +
+        `Bórrala en el panel y vuelve a escribirla (las claves solo usan letras, números y símbolos ASCII).`
+    );
+  }
+}
 /** Config lista para llamar: aplica defaults y valida la URL base. */
 export function isProviderReady(settings: AiSettings): boolean {
   if (!settings.enabled) return false;
@@ -286,6 +305,10 @@ export async function chatCompletion(
 
   if (!settings.apiKey && preset.requiresKey) {
     throw new Error(`Falta la API key de ${preset.label}.`);
+  }
+  if (settings.apiKey) {
+    assertHeaderSafe(cleanApiKey(settings.apiKey), `La API key de ${preset.label}`);
+    settings = { ...settings, apiKey: cleanApiKey(settings.apiKey) };
   }
   if (!settings.model) {
     throw new Error(`Falta el modelo para ${preset.label}.`);

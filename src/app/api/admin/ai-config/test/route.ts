@@ -99,6 +99,17 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
+  if (apiKey && /[^\x20-\x7E]/.test(apiKey)) {
+    const bad = apiKey.match(/[^\x20-\x7E]/)?.[0] ?? "?";
+    return NextResponse.json(
+      {
+        error:
+          `La API key de ${preset.label} contiene un carácter no válido ("${bad}"). ` +
+          `Borra el campo de la clave y pégala de nuevo con cuidado (las claves solo usan ASCII).`,
+      },
+      { status: 400 }
+    );
+  }
   if (!model) {
     return NextResponse.json({ error: `Falta el modelo para ${preset.label}.` }, { status: 400 });
   }
