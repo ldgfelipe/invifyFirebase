@@ -33,7 +33,11 @@ const TEST_PROMPT =
   'Responde únicamente con este JSON: {"ok":true,"message":"conexion_ok"}';
 
 /** Traduce un fallo HTTP en causa probable + acción, con el proveedor al frente. */
-function friendlyTestError(preset: { id: string; label: string }, err: any): string {
+function friendlyTestError(
+  preset: { id: string; label: string },
+  err: any,
+  keyLen?: number
+): string {
   const head = `${preset.label}: `;
   if (err?.name === "AbortError") return `${head}Timeout: el proveedor tardó más de 25 s.`;
   const status = err?.status as number | undefined;
@@ -42,7 +46,8 @@ function friendlyTestError(preset: { id: string; label: string }, err: any): str
     return preset.id === "cloudflare"
       ? `${head}Cloudflare rechazó el token (Authentication error). Revisa: 1) que sea un API Token de cuenta (no la Global API Key), ` +
         `2) que el {account_id} de la Base URL sea de la misma cuenta del token, 3) que el token tenga permiso sobre Workers AI.`
-      : `${head}Credencial rechazada (401). La clave es inválida, está revocada o es de otro proyecto. Pégala de nuevo y guarda.`;
+      : `${head}Credencial rechazada (401). La clave es inválida, está revocada o es de otro proyecto. ` +
+        `Pégala de nuevo y guarda.${typeof keyLen === "number" ? ` (La clave probada mide ${keyLen} caracteres.)` : ""}`;
   }
   if (status === 403) {
     return `${head}Sin permiso (403). La clave es válida pero no tiene acceso a ese modelo o cuenta. Detalle: ${detail.slice(0, 200)}`;
@@ -195,7 +200,7 @@ export async function POST(req: NextRequest) {
       model,
       latencyMs: Date.now() - startedAt,
       at: Date.now(),
-      message: friendlyTestError(preset, err),
+      message: friendlyTestError(preset, err, String(candidate.apiKey || "").length),
     };
   }
 
