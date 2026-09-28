@@ -120,13 +120,13 @@ export default function StatsPage() {
   }
 
   const features = getInvitationFeatures(inv);
-  const totalViews = inv.stats.views ?? 0;
-  const uniqueViews = inv.stats.uniqueViews ?? 0;
+  const totalViews = inv.stats?.views ?? 0;
+  const uniqueViews = inv.stats?.uniqueViews ?? 0;
   const totalPax = features.rsvp ? rsvps.reduce((s, r) => s + r.personas, 0) : 0;
   const quizzesDone = features.quiz ? quizzes.length : 0;
 
   // Conteo por pregunta: opción → votos (las claves de datos son los ids).
-  const quizModule = inv.builderConfig.modules.find((m) => m.type === "quiz") as QuizModule | undefined;
+  const quizModule = ((inv.builderConfig?.modules ?? []).find((m) => m.type === "quiz") as QuizModule | undefined);
   const quizTally = (quizModule?.questions ?? []).map((q) => {
     const counts = new Map<string, number>();
     for (const sub of quizzes) {
@@ -259,7 +259,7 @@ export default function StatsPage() {
                   <p className="font-medium text-ink text-sm">{question.question}</p>
                   <p className="text-xs text-ink/50 mb-2">{total} respuesta(s)</p>
                   <div className="space-y-1.5">
-                    {question.options.map((opt) => {
+                    {(question.options ?? []).map((opt) => {
                       const votes = counts.get(opt) ?? 0;
                       const pct = total > 0 ? Math.round((votes / total) * 100) : 0;
                       return (
