@@ -108,23 +108,26 @@ export function AIAssistant({
         ]);
       } else if (data.builderConfig) {
         setConfig(data.builderConfig as BuilderConfig);
-        const preview = JSON.stringify(data.builderConfig);
-        const summary =
-          preview.length > 260 ? preview.slice(0, 260) + "…" : preview;
-        setMessages((m) => [
-          ...m,
-          {
-            role: "assistant",
-            text: `Listo. He actualizado la invitación. ${summary}`,
-          },
-        ]);
+        // El servidor manda "reply": mensaje humano y cálido. El JSON del
+        // objeto jamás se muestra en el chat (no es para programadores).
+        const reply =
+          typeof data.reply === "string" && data.reply.trim()
+            ? data.reply
+            : isEn
+              ? "Done! I applied what you asked me to. Take a look at the preview."
+              : "¡Listo! Apliqué lo que me pediste. Échale un ojo a la vista previa.";
+        setMessages((m) => [...m, { role: "assistant", text: reply }]);
       }
     } catch (e: any) {
-      setError(e.message);
-      setMessages((m) => [
-        ...m,
-        { role: "assistant", text: `Error: ${e.message}. Intenta de nuevo.` },
-      ]);
+      const rawMsg = String(e?.message ?? "");
+      setError(rawMsg);
+      // En el chat, lenguaje humano: sin JSON ni tecnicismos.
+      const friendly = /builderconfig|modules|json|raw/i.test(rawMsg)
+        ? isEn
+          ? "Hmm, I didn't quite catch that change. Could you tell me again in other words?"
+          : "Mmm, no terminé de entender ese cambio. ¿Me lo dices de otra forma?"
+        : rawMsg;
+      setMessages((m) => [...m, { role: "assistant", text: friendly }]);
     } finally {
       setSending(false);
     }
