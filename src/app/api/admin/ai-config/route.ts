@@ -15,6 +15,7 @@ import {
   saveAiSettings,
   toPublicSettings,
 } from "@/lib/ai/config";
+import { cleanApiKey, invalidApiKeyChar } from "@/lib/ai/client";
 
 export const runtime = "nodejs";
 
@@ -68,20 +69,36 @@ export async function PUT(req: NextRequest) {
 
   // El input de la clave llega enmascarado: solo se reemplaza si el admin
   // escribe algo que NO sea la máscara (o si lo deja vacío a propósito).
-  // Además se rechazan claves nuevas con caracteres fuera de ASCII (p. ej. €
-  // colado al pegar): reventarían el header Authorization con un error opaco.
-  const hasBadChars = (s: string) => /[^\x20-\x7E]/.test(s);
+  // Al pegar suelen colarse invisibles (cero-width, nbsp): se limpian solos.
+  // Solo se rechaza lo visiblemente malo (p. ej. €) o espacios interiores.
+  const rejectKey = (label: string, cleaned: string): NextResponse | null => {
+    const bad = invalidApiKeyChar(cleaned);
+    if (bad) {
+      return NextResponse.json(
+        { error: `La API key ${label}contiene un carácter no válido ("${bad}"). Bórrala y pégala de nuevo sin símbolos extra.` },
+        { status: 400 }
+      );
+    }
+    if (/\s/.test(cleaned)) {
+      return NextResponse.json(
+        { error: `La API key ${label}contiene espacios en blanco. Pégala de corrido, sin espacios ni saltos de línea.` },
+        { status: 400 }
+      );
+    }
+    return null;
+  };
   const incomingKey = typeof patch.apiKey === "string" ? patch.apiKey.trim() : "";
   if (isMaskedApiKey(incomingKey)) delete patch.apiKey;
   if (incomingKey === "") delete patch.apiKey;
-  if (typeof patch.apiKey === "string" && hasBadChars(patch.apiKey)) {
-    return NextResponse.json(
-      {
-        error:
-          "La API key nueva contiene un carácter no válido. Bórrala y pégala de nuevo con cuidado (las claves solo usan ASCII).",
-      },
-      { status: 400 }
-    );
+  if (typeof patch.apiKey === "string") {
+    const cleaned = cleanApiKey(patch.apiKey);
+    if (cleaned === "") {
+      delete patch.apiKey;
+    } else {
+      const rejected = rejectKey("", cleaned);
+      if (rejected) return rejected;
+      patch.apiKey = cleaned;
+    }
   }
 
   // Si viene la lista de proveedores, desmaskar las claves.
@@ -97,22 +114,26 @@ export async function PUT(req: NextRequest) {
           o.provider === provider &&
           (typeof model === "string" && model.trim() ? o.model === model.trim() : true)
       ) ?? oldProviders.find((o) => o.provider === provider);
+    const cleanedKeys: string[] = [];
     for (const p of incomingProviders as any[]) {
       const key = typeof p?.apiKeyMasked === "string" ? p.apiKeyMasked : "";
-      if (key && !isMaskedApiKey(key) && /[^\x20-\x7E]/.test(key)) {
-        return NextResponse.json(
-          {
-            error: `La API key de "${p?.provider ?? "?"} contiene un carácter no válido. Bórrala y pégala de nuevo (solo ASCII).`,
-          },
-          { status: 400 }
-        );
+      if (!key || isMaskedApiKey(key)) {
+        cleanedKeys.push("");
+        continue;
       }
+      const cleaned = cleanApiKey(key);
+      if (cleaned === "") {
+        cleanedKeys.push("");
+        continue;
+      }
+      const rejected = rejectKey(`de "${p?.provider ?? "?"} "`, cleaned);
+      if (rejected) return rejected;
+      cleanedKeys.push(cleaned);
     }
     patch.aiProviders = incomingProviders.map((p: any, i: number) => {
-      const key = typeof p.apiKeyMasked === "string" ? p.apiKeyMasked : "";
       const old = findOld(p.provider, p.model);
-      // Si la clave es la máscara o está vacía, conservar la original.
-      const apiKey = isMaskedApiKey(key) || key === "" ? (old?.apiKey ?? "") : key;
+      // Limpia (o vacía/máscara): conservar la original.
+      const apiKey = cleanedKeys[i] !== "" ? cleanedKeys[i] : (old?.apiKey ?? "");
       return {
         provider: p.provider,
         model: typeof p.model === "string" ? p.model : "",

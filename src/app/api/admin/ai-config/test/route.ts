@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { getAiSettings } from "@/lib/ai/config";
 import { isMaskedApiKey } from "@/lib/ai/config";
+import { cleanApiKey, invalidApiKeyChar } from "@/lib/ai/client";
 import { extractJson } from "@/lib/ai/client";
 import { isKnownProvider, isUsableBaseUrl, resolveProvider } from "@/lib/ai/providers";
 import { normalizeAiSettings } from "@/lib/ai/config";
@@ -105,9 +106,11 @@ export async function POST(req: NextRequest) {
   const rawKey =
     (typeof body.apiKey === "string" && body.apiKey.trim()) ||
     (typeof providerConfig?.apiKey === "string" ? (providerConfig.apiKey as string).trim() : "");
+  // Máscara o vacío: usar la guardada. Clave nueva: limpiarla de invisibles.
+  const freshKey = rawKey && !isMaskedApiKey(rawKey) ? cleanApiKey(rawKey) : "";
   const apiKey =
-    rawKey && !isMaskedApiKey(rawKey)
-      ? rawKey
+    freshKey !== ""
+      ? freshKey
       : (savedMatch?.apiKey && !isMaskedApiKey(savedMatch.apiKey)
           ? savedMatch.apiKey
           : providerConfig
@@ -143,11 +146,16 @@ export async function POST(req: NextRequest) {
         : `Falta la API key de ${preset.label}. Escribe una o guárdala antes de probar.`
     );
   }
-  if (apiKey && /[^\x20-\x7E]/.test(apiKey)) {
-    const bad = apiKey.match(/[^\x20-\x7E]/)?.[0] ?? "?";
+  const bad = apiKey ? invalidApiKeyChar(apiKey) : null;
+  if (bad) {
     return fail(
       `La API key de ${preset.label} contiene un carácter no válido ("${bad}"). ` +
-        `Borra el campo de la clave y pégala de nuevo con cuidado (las claves solo usan ASCII).`
+        `Borra el campo de la clave y pégala de nuevo sin símbolos extra.`
+    );
+  }
+  if (apiKey && /\s/.test(apiKey)) {
+    return fail(
+      `La API key de ${preset.label} contiene espacios en blanco. Pégala de corrido, sin espacios ni saltos de línea.`
     );
   }
   if (!model) {

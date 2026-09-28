@@ -108,9 +108,14 @@ function fallbackExtract(raw: string): any | null {
   }
 }
 
-/** Limpia caracteres invisibles que se cuelan al pegar (cero-width, BOM). */
+/** Limpia caracteres invisibles que se cuelan al pegar (cero-width, BOM, nbsp). */
 export function cleanApiKey(key: string): string {
-  return key.replace(/[\u200B-\u200F\uFEFF\u00A0]/g, "").trim();
+  return key.replace(/[\u200B-\u200F\u2060-\u2064\uFEFF\u00A0]/g, "").trim();
+}
+
+/** Primer carácter realmente inválido en una clave ya limpia (o null). */
+export function invalidApiKeyChar(cleaned: string): string | null {
+  return cleaned.match(/[^\x20-\x7E]/)?.[0] ?? null;
 }
 
 /**
