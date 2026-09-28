@@ -217,7 +217,11 @@ async function chatOpenAi(
       if (!canRetry) throw err;
       data = await send(false);
     }
-    const raw: string = data?.choices?.[0]?.message?.content ?? "";
+    const msg = data?.choices?.[0]?.message ?? {};
+    // Algunos modelos de razonamiento (p. ej. gpt-oss en Groq) devuelven el
+    // texto en reasoning_content/reasoning y dejan content vacío.
+    const raw: string =
+      msg.content ?? msg.reasoning_content ?? msg.reasoning ?? "";
     return { raw, latencyMs: Date.now() - startedAt };
   } finally {
     clearTimeout(timer);
