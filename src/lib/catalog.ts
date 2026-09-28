@@ -16,12 +16,12 @@ import {
 import { serverDb } from "./firebase/serverClient";
 import type { Template, TemplateCategory, BuilderConfig, InvitationModule } from "./types";
 
-export const CATEGORIES: { id: TemplateCategory; label: string }[] = [
-  { id: "boda", label: "Bodas" },
-  { id: "cumpleanos", label: "Cumpleaños" },
-  { id: "babyshower", label: "Baby Shower" },
-  { id: "bautizo", label: "Bautizos" },
-  { id: "corporativo", label: "Corporativo" },
+export const CATEGORIES: { id: TemplateCategory; label: string; labelEn: string }[] = [
+  { id: "boda", label: "Bodas", labelEn: "Weddings" },
+  { id: "cumpleanos", label: "Cumpleaños", labelEn: "Birthdays" },
+  { id: "babyshower", label: "Baby Shower", labelEn: "Baby Showers" },
+  { id: "bautizo", label: "Bautizos", labelEn: "Baptisms" },
+  { id: "corporativo", label: "Corporativo", labelEn: "Corporate" },
 ];
 
 export async function getActiveTemplates(

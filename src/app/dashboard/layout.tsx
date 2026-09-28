@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/lib/i18n/provider";
 import Link from "next/link";
 
 export default function DashboardLayout({
@@ -11,6 +12,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const { user, loading, profile, signOut } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
 
   useEffect(() => {
@@ -34,10 +36,10 @@ export default function DashboardLayout({
           </Link>
           <nav className="flex items-center gap-4 text-sm">
             <Link href="/templates" className="text-ink/70 hover:text-gold-500">
-              Catálogo
+              {t.header.catalog}
             </Link>
             <Link href="/pricing" className="text-ink/70 hover:text-gold-500">
-              Planes
+              {t.header.pricing}
             </Link>
             <Link href="/dashboard/profile" className="text-ink/70 hover:text-gold-500 flex items-center gap-1">
               <span className="hidden sm:inline">Perfil</span>
