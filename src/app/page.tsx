@@ -7,6 +7,7 @@ import { HomeCatalog } from "@/components/catalog/HomeCatalog";
 import { Hero } from "@/components/Hero";
 import { PromoBanner } from "@/components/PromoBanner";
 import { AiCta } from "@/components/aiwiz/AiCta";
+import { AIPromo } from "@/components/aiwiz/AIPromo";
 
 export const revalidate = 300;
 
@@ -23,6 +24,8 @@ export default async function HomePage() {
 
       {/* INVITACIÓN CON IA */}
       <AiCta />
+
+      <AIPromo />
 
       <HomeCatalog templates={featured} categories={CATEGORIES} />
     </div>

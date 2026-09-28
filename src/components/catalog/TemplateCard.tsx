@@ -9,6 +9,11 @@ import Link from "next/link";
 import { useLanguage } from "@/lib/i18n/provider";
 import type { Template } from "@/lib/types";
 
+function fallbackThumb(): string {
+  // Retrocede al lock 1 si la URL está vacía o es inválida.
+  return "/api/thumb/lock/1";
+}
+
 export function TemplateCard({
   template,
   categoryLabel,
@@ -17,6 +22,9 @@ export function TemplateCard({
   categoryLabel?: string;
 }) {
   const { t } = useLanguage();
+  const thumb = template.thumbnailUrl && template.thumbnailUrl.startsWith("/api/thumb/lock/")
+    ? template.thumbnailUrl
+    : fallbackThumb();
 
   return (
     <div className="card group overflow-hidden hover:shadow-lg transition">
@@ -27,7 +35,7 @@ export function TemplateCard({
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={template.thumbnailUrl}
+          src={thumb}
           alt={`Plantilla ${template.name}`}
           className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
           loading="lazy"
