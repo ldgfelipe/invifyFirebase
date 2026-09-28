@@ -58,6 +58,7 @@ export default function AdminLayout({
           <AdminLink href="/admin/plans" label="Planes" />
           <AdminLink href="/admin/users" label="Usuarios" />
           <AdminLink href="/admin/sales" label="Ventas / Compras" />
+          <AdminLink href="/admin/solicitudes" label="Solicitudes" />
           <AdminLink href="/admin/contacts" label="Contactos" />
           <AdminLink href="/admin/asistente-ia" label="Asistente IA" />
           <AdminLink href="/admin/settings" label="Sitio / Landing" />

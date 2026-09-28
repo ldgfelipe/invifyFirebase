@@ -65,8 +65,14 @@ service cloud.firestore {
       allow read: if resource.data.status == 'published' || isOwner(resource.data.ownerUid) || isAdmin();
       // Creación: el usuario crea invitaciones con su propio uid (vía webhook/clonado).
       allow create: if isSignedIn() && request.resource.data.ownerUid == request.auth.uid;
-      // Solo el dueño (o admin) edita/elimina su invitación.
-      allow update, delete: if isOwner(resource.data.ownerUid) || isAdmin();
+      // Edición de contenido en publicadas SOLO vía API (/api/invitations/[id]
+      // con cupo de cambios). Directo solo en borrador, o toques a stats
+      // (reinicio desde Estadísticas). Admin siempre puede.
+      allow update: if isAdmin()
+        || (isOwner(resource.data.ownerUid)
+          && (resource.data.status != 'published'
+            || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['stats'])));
+      allow delete: if isOwner(resource.data.ownerUid) || isAdmin();
 
       // ---- /invitations/{id}/rsvps : escritura pública anónima, lectura solo dueño ----
       match /rsvps/{rsvpId} {
@@ -91,6 +97,22 @@ service cloud.firestore {
           && request.resource.data.datos is map;
         allow read, update, delete: if isOwner(get(/databases/$(database)/documents/invitations/$(invitationId)).data.ownerUid) || isAdmin();
       }
+    }
+
+    // ---- /changeRequests : solicitudes de cambios extra post-publicación ----
+    // El dueño pide permiso con motivo cuando agota sus 2 cambios; admin decide.
+    match /changeRequests/{requestId} {
+      allow create: if isSignedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.keys().hasOnly(['invitationId', 'ownerUid', 'invitationTitle', 'slug', 'motivo', 'status', 'createdAt'])
+        && request.resource.data.invitationId is string
+        && request.resource.data.slug is string
+        && request.resource.data.motivo is string
+        && request.resource.data.motivo.size() >= 10
+        && request.resource.data.motivo.size() <= 500;
+      allow read: if isOwner(resource.data.ownerUid) || isAdmin();
+      allow update, delete: if isAdmin();
     }
 
     // ---- /plans : catálogo de planes (solo lectura) ----

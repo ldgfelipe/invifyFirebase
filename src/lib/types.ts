@@ -79,12 +79,38 @@ export interface Invitation {
   // Config personalizada del cliente (copia editable del template).
   builderConfig: BuilderConfig;
   stats: InvitationStats;
+  // Publicación y control de cambios: al publicar se regalan 2 cambios
+  // (changesAfterPublish = 0); cada guardado publicado suma 1. Agotados,
+  // el cliente debe pedir permiso a Invify (ver ChangeRequest).
+  publishedAt?: number;
+  changesAfterPublish?: number;
   // Metadatos SEO opcionales por invitación.
   meta?: {
     description?: string;
     imageUrl?: string;
   };
 }
+
+// --------------------- Solicitudes de cambios extra ----------------------
+// Cuando una invitación publicada agota sus 2 cambios, el cliente solicita
+// permiso detallando el motivo; Invify aprueba (regala 2 más) o rechaza.
+export type ChangeRequestStatus = "pending" | "approved" | "rejected";
+
+export interface ChangeRequest {
+  id: string;
+  invitationId: string;
+  ownerUid: string;
+  invitationTitle: string;
+  slug: string;
+  motivo: string;
+  status: ChangeRequestStatus;
+  createdAt: number;
+  decidedAt?: number;
+  decidedBy?: string;
+}
+
+/** Cambios gratuitos tras cada publicación/aprobación. */
+export const FREE_CHANGES_AFTER_PUBLISH = 2;
 
 // ----------------------------- Formularios públicos ------------------------
 export interface Rsvp {

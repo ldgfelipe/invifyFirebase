@@ -12,13 +12,15 @@ import { db } from "@/lib/firebase/client";
 import {
   doc,
   getDoc,
-  updateDoc,
   collection,
   query,
   where,
   getDocs,
 } from "firebase/firestore";
 import type { Invitation } from "@/lib/types";
+import { FREE_CHANGES_AFTER_PUBLISH } from "@/lib/types";
+import { saveInvitationContent, ExhaustedError } from "@/lib/invitationSave";
+import { ChangeRequestModal } from "@/components/dashboard/ChangeRequestModal";
 import { slugify } from "@/lib/slug";
 import { invitationUrl } from "@/lib/seo";
 
@@ -34,6 +36,8 @@ export default function EditorPage() {
   const [error, setError] = useState<string | null>(null);
   const [slugStatus, setSlugStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid" | "reserved">("idle");
   const [suggestedSlug, setSuggestedSlug] = useState<string | null>(null);
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -133,17 +137,39 @@ export default function EditorPage() {
       }
     }
     if (!inv) return;
-    await updateDoc(doc(db, "invitations", id), {
-      title,
-      themeColor: color,
-      slug: wanted,
-      "builderConfig.theme.primaryColor": color,
-    });
-    setMsg("Guardado correctamente.");
+    // El guardado pasa por la API: cuenta el cupo post-publicación.
+    try {
+      const token = await user!.getIdToken();
+      const updatedTheme = {
+        ...inv.builderConfig.theme,
+        primaryColor: color,
+      };
+      const result = await saveInvitationContent(id as string, token, {
+        builderConfig: { ...inv.builderConfig, theme: updatedTheme },
+        title,
+        slug: wanted,
+      });
+      setInv({ ...inv, title, themeColor: color, slug: wanted, changesAfterPublish: result.used });
+      setMsg(
+        result.published
+          ? `Guardado correctamente. Te quedan ${result.remaining}/${FREE_CHANGES_AFTER_PUBLISH} cambios.`
+          : "Guardado correctamente."
+      );
+    } catch (e: any) {
+      if (e instanceof ExhaustedError) {
+        setRequestSent(false);
+        setRequestOpen(true);
+      } else {
+        setError(e.message);
+      }
+    }
     setSaving(false);
   }
 
   if (!inv) return <p className="text-ink/60">Cargando…</p>;
+
+  const isPublished = inv.status === "published";
+  const remainingChanges = Math.max(0, FREE_CHANGES_AFTER_PUBLISH - (inv.changesAfterPublish ?? 0));
 
   return (
     <div className="max-w-2xl">
@@ -151,6 +177,11 @@ export default function EditorPage() {
         ← Volver a Mis invitaciones
       </Link>
       <h1 className="section-title mt-4">Personalizar invitación</h1>
+      {isPublished && (
+        <p className={`text-xs mt-2 px-3 py-2 rounded-lg border inline-block ${remainingChanges > 0 ? "bg-green-50 border-green-200 text-green-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+          🌐 Publicada · {remainingChanges > 0 ? `te quedan ${remainingChanges}/${FREE_CHANGES_AFTER_PUBLISH} cambios` : "cupo de cambios agotado"}
+        </p>
+      )}
 
       <div className="card p-6 mt-6 space-y-5">
         <div>
@@ -227,6 +258,11 @@ export default function EditorPage() {
 
         {error && <p className="text-red-600 text-sm">{error}</p>}
         {msg && <p className="text-gold-500 text-sm">{msg}</p>}
+        {requestSent && (
+          <p className="text-green-700 text-sm bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+            Solicitud enviada. Te avisaremos cuando Invify la revise.
+          </p>
+        )}
 
         <div className="flex gap-3">
           <button onClick={save} disabled={saving || slugStatus === "taken" || slugStatus === "reserved" || slugStatus === "checking"} className="btn-primary disabled:opacity-50">
@@ -237,6 +273,19 @@ export default function EditorPage() {
           </Link>
         </div>
       </div>
+
+      {requestOpen && user && (
+        <ChangeRequestModal
+          invitationId={id as string}
+          getToken={() => user.getIdToken()}
+          invitationTitle={inv.title}
+          onClose={() => setRequestOpen(false)}
+          onSent={() => {
+            setRequestOpen(false);
+            setRequestSent(true);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -4,9 +4,12 @@ import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase/client";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { getInvitationFeatures, isModuleAllowed, filterBuilderConfig, FREE_FEATURES } from "@/lib/plans";
 import type { Invitation, BuilderConfig, InvitationModule } from "@/lib/types";
+import { FREE_CHANGES_AFTER_PUBLISH } from "@/lib/types";
+import { saveInvitationContent, ExhaustedError } from "@/lib/invitationSave";
+import { ChangeRequestModal } from "@/components/dashboard/ChangeRequestModal";
 import { EditorSidebar } from "@/components/editor/EditorSidebar";
 import { EditorCanvas } from "@/components/editor/EditorCanvas";
 import { EditorPanel } from "@/components/editor/EditorPanel";
@@ -25,6 +28,8 @@ export default function InvitationEditorPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [requestOpen, setRequestOpen] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
 
   useEffect(() => {
     if (!user || !id) return;
@@ -99,7 +104,7 @@ export default function InvitationEditorPage() {
   }, [config]);
 
   async function save() {
-    if (!invitation || !config || !id) return;
+    if (!invitation || !config || !id || !user) return;
     setSaving(true);
     setError(null);
     try {
@@ -109,19 +114,32 @@ export default function InvitationEditorPage() {
       if (blocked > 0) {
         setError(`Se omitieron ${blocked} módulo(s) no incluidos en tu plan (Pro/Premium).`);
       }
-      await updateDoc(doc(db, "invitations", id), {
-        builderConfig: sanitized,
-        themeColor: sanitized.theme.primaryColor,
-      });
+      // El guardado pasa por la API: cuenta el cupo post-publicación.
+      const token = await user.getIdToken();
+      const result = await saveInvitationContent(id as string, token, { builderConfig: sanitized });
+      // Refresca el contador local con lo que responde el servidor.
+      setInvitation((prev) =>
+        prev ? { ...prev, builderConfig: sanitized, changesAfterPublish: result.used } : prev
+      );
       if (blocked > 0) setConfig(sanitized);
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err: any) {
-      setError(err.message);
+      if (err instanceof ExhaustedError) {
+        // Cupo agotado: abrir solicitud a Invify con motivo.
+        setRequestSent(false);
+        setRequestOpen(true);
+      } else {
+        setError(err.message);
+      }
     } finally {
       setSaving(false);
     }
   }
+
+  const isPublished = invitation?.status === "published";
+  const usedChanges = invitation?.changesAfterPublish ?? 0;
+  const remainingChanges = Math.max(0, FREE_CHANGES_AFTER_PUBLISH - usedChanges);
 
   if (loading) return <div className="flex h-screen items-center justify-center">Cargando editor…</div>;
   if (!invitation || !config) return <div className="flex h-screen items-center justify-center">Invitación no encontrada</div>;
@@ -137,6 +155,11 @@ export default function InvitationEditorPage() {
         <div className="p-4 border-b border-ink/10">
           <h1 className="font-serif text-xl text-ink">Editor</h1>
           <p className="text-xs text-ink/50 mt-1">{invitation.title}</p>
+          {isPublished && (
+            <p className={`text-xs mt-2 px-2 py-1 rounded-lg border ${remainingChanges > 0 ? "bg-green-50 border-green-200 text-green-700" : "bg-amber-50 border-amber-200 text-amber-700"}`}>
+              🌐 Publicada · {remainingChanges > 0 ? `te quedan ${remainingChanges}/${FREE_CHANGES_AFTER_PUBLISH} cambios` : "cupo de cambios agotado"}
+            </p>
+          )}
         </div>
         {(!features.rsvp || !features.quiz || !features.audio) && (
           <p className="mx-4 mt-3 rounded-lg bg-gold-50 border border-gold-200 px-3 py-2 text-xs text-ink/70">
@@ -161,6 +184,11 @@ export default function InvitationEditorPage() {
             {saving ? "Guardando…" : saved ? "¡Guardado!" : "Guardar cambios"}
           </button>
           {error && <p className="text-red-600 text-sm mt-2 text-center">{error}</p>}
+          {requestSent && (
+            <p className="text-green-700 text-xs mt-2 text-center bg-green-50 border border-green-200 rounded-lg px-2 py-1.5">
+              Solicitud enviada. Te avisaremos cuando Invify la revise.
+            </p>
+          )}
         </div>
       </aside>
 
@@ -183,8 +211,7 @@ export default function InvitationEditorPage() {
       </main>
 
       {/* Panel lateral - editor del módulo seleccionado */}
-      <aside className="w-80 bg-white border-l border-ink/10 flex flex-col">
-        <div className="p-4 border-b border-ink/10">
+      <aside className="w-80 bg-white border-l border-ink/10 flex flex-col">        <div className="p-4 border-b border-ink/10">
           <h3 className="font-serif text-lg text-ink">
             {selectedModule ? `Editar: ${getModuleLabel(selectedModule.type)}` : "Selecciona un módulo"}
           </h3>
@@ -207,6 +234,19 @@ export default function InvitationEditorPage() {
           )}
         </div>
       </aside>
+
+      {requestOpen && user && (
+        <ChangeRequestModal
+          invitationId={id as string}
+          getToken={() => user.getIdToken()}
+          invitationTitle={invitation.title}
+          onClose={() => setRequestOpen(false)}
+          onSent={() => {
+            setRequestOpen(false);
+            setRequestSent(true);
+          }}
+        />
+      )}
     </div>
   );
 }

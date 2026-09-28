@@ -22,7 +22,7 @@ import {
   query,
   orderBy,
 } from "firebase/firestore";
-import type { Invitation, Rsvp, QuizResponse } from "@/lib/types";
+import type { Invitation, Rsvp, QuizResponse, QuizModule } from "@/lib/types";
 import { getInvitationFeatures } from "@/lib/plans";
 import { invitationUrlRuntime } from "@/lib/seo";
 import { ShareMenu } from "@/components/invitation/ShareMenu";
@@ -31,6 +31,7 @@ export default function StatsPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const [inv, setInv] = useState<Invitation | null>(null);
+  const [denied, setDenied] = useState(false);
   const [rsvps, setRsvps] = useState<Rsvp[]>([]);
   const [quizzes, setQuizzes] = useState<QuizResponse[]>([]);
   const [resetting, setResetting] = useState(false);
@@ -46,9 +47,22 @@ export default function StatsPage() {
       onSnapshot(
         invRef,
         (snap) => {
-          if (snap.exists()) setInv(snap.data() as Invitation);
+          if (!snap.exists()) {
+            setDenied(true);
+            return;
+          }
+          const data = snap.data() as Invitation;
+          // Solo el dueño ve estas estadísticas (las reglas ya lo exigen).
+          if (user && data.ownerUid !== user.uid) {
+            setDenied(true);
+            return;
+          }
+          setInv(data);
         },
-        (err) => console.warn("[stats] onSnapshot inv error", err)
+        (err) => {
+          console.warn("[stats] onSnapshot inv error", err);
+          setDenied(true);
+        }
       )
     );
 
@@ -92,12 +106,36 @@ export default function StatsPage() {
     setResetting(false);
   }
 
-  if (!inv) return <p className="text-ink/60">Cargando…</p>;
+  if (!inv && !denied) return <p className="text-ink/60">Cargando…</p>;
+  if (denied || !inv) {
+    return (
+      <div className="card p-10 text-center max-w-lg mx-auto">
+        <h1 className="section-title mt-4">Sin acceso</h1>
+        <p className="text-ink/60 mt-2">Esta invitación no existe o no es tuya.</p>
+        <Link href="/dashboard" className="btn-primary mt-6 inline-block">
+          Volver
+        </Link>
+      </div>
+    );
+  }
 
   const features = getInvitationFeatures(inv);
   const totalViews = inv.stats.views ?? 0;
+  const uniqueViews = inv.stats.uniqueViews ?? 0;
   const totalPax = features.rsvp ? rsvps.reduce((s, r) => s + r.personas, 0) : 0;
   const quizzesDone = features.quiz ? quizzes.length : 0;
+
+  // Conteo por pregunta: opción → votos (las claves de datos son los ids).
+  const quizModule = inv.builderConfig.modules.find((m) => m.type === "quiz") as QuizModule | undefined;
+  const quizTally = (quizModule?.questions ?? []).map((q) => {
+    const counts = new Map<string, number>();
+    for (const sub of quizzes) {
+      const ans = sub.datos?.[q.id];
+      if (typeof ans === "string" && ans) counts.set(ans, (counts.get(ans) ?? 0) + 1);
+    }
+    const total = [...counts.values()].reduce((s, n) => s + n, 0);
+    return { question: q, counts, total };
+  });
 
   if (!features.stats) {
     return (
@@ -149,8 +187,9 @@ export default function StatsPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-8">
         <Kpi label="Aperturas totales" value={totalViews} />
+        <Kpi label="Visitantes únicos" value={uniqueViews} />
         <Kpi label="Invitados (pax)" value={totalPax} />
         <Kpi label="Confirmaciones" value={rsvps.length} />
         <Kpi label="Quiz completados" value={quizzesDone} />
@@ -211,6 +250,35 @@ export default function StatsPage() {
               🖨️ Imprimir resultados
             </button>
           </div>
+
+          {/* Resumen por pregunta */}
+          {quizTally.length > 0 && (
+            <div className="space-y-5 mb-8">
+              {quizTally.map(({ question, counts, total }) => (
+                <div key={question.id}>
+                  <p className="font-medium text-ink text-sm">{question.question}</p>
+                  <p className="text-xs text-ink/50 mb-2">{total} respuesta(s)</p>
+                  <div className="space-y-1.5">
+                    {question.options.map((opt) => {
+                      const votes = counts.get(opt) ?? 0;
+                      const pct = total > 0 ? Math.round((votes / total) * 100) : 0;
+                      return (
+                        <div key={opt} className="flex items-center gap-2 text-sm">
+                          <span className="w-40 shrink-0 truncate text-ink/70">{opt}</span>
+                          <div className="flex-1 h-2 rounded-full bg-ink/10 overflow-hidden">
+                            <div className="h-full bg-gold-500 rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                          <span className="w-16 text-right text-xs text-ink/60">{votes} ({pct}%)</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <h3 className="font-medium text-ink/70 text-sm mb-3">Respuestas individuales</h3>
           <div className="space-y-4">
             {quizzes.map((q, i) => (
               <div key={i} className="border-b border-ink/5 pb-3">
