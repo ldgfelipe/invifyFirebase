@@ -12,8 +12,12 @@
 import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/seo";
 
-/** Áreas que nunca se rastrean: datos personales, API y panel. */
-const PRIVATE = ["/api/", "/dashboard/", "/admin/", "/login", "/i/"];
+/**
+ * Áreas que nunca se rastrean: datos personales, API, panel y login.
+ * /cuenta no existe hoy, pero se bloquea por si se crea más adelante.
+ * /i/* contiene invitaciones particulares: el sitemap las excluye a propósito.
+ */
+const PRIVATE = ["/api/", "/dashboard/", "/admin/", "/login", "/cuenta/", "/i/"];
 
 /** Buscadores y asistentes de IA con acceso explícito al contenido público. */
 const AI_AND_SEARCH_AGENTS = [
