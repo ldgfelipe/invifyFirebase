@@ -3,7 +3,15 @@
 // ============================================================================
 import type { SeoMeta } from "./types";
 
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+// canonical de producción. Un localhost en el .env local gana sobre el .env
+// durante el build (Next prioriza .env.local), lo que horneaba
+// http://localhost:3000 en el sitemap y el robots.txt de producción; aquí se
+// descarta para que ambos apunten siempre al dominio real.
+const RAW_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "";
+
+export const SITE_URL = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(RAW_SITE_URL)
+  ? "https://invify.online"
+  : RAW_SITE_URL || "https://invify.online";
 
 /** Construye la URL absoluta de una invitación pública (SSR / metadata). */
 export function invitationUrl(slug: string): string {
