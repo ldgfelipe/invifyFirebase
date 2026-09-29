@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useLanguage } from "@/lib/i18n/provider";
+import { resolveHeroBackground } from "@/lib/catalogImages";
 import type { SiteSettings } from "@/lib/types";
 
 export function Hero({ settings }: { settings: SiteSettings }) {
@@ -12,9 +13,11 @@ export function Hero({ settings }: { settings: SiteSettings }) {
   const cta = locale === "en" && settings.heroCta_en ? settings.heroCta_en : settings.heroCta;
 
   // Imagen de fondo asociada desde el admin (o desde el seed). En inglés se
-  // puede definir una distinta; si no, se reutiliza la de español.
-  const bg =
-    (locale === "en" && settings.heroBackgroundImage_en) || settings.heroBackgroundImage || "";
+  // puede definir una distinta; si no, se reutiliza la de español. Si el host
+  // ya no sirve la imagen (loremflickr devuelve 401), se usa el fondo liso.
+  const bg = resolveHeroBackground(
+    (locale === "en" && settings.heroBackgroundImage_en) || settings.heroBackgroundImage
+  );
 
   return (
     <section className="relative min-h-[70vh] flex flex-col items-center justify-center text-center px-6 bg-champagne overflow-hidden">
