@@ -1,19 +1,24 @@
 // ============================================================================
 // MIDDLEWARE - Barrera de rutas privadas para rastreadores y usuarios.
 //
-// /admin y /dashboard solo validan la sesión en el cliente (AuthContext +
-// useEffect), así que el HTML se servía con 200 a cualquiera, incluidos bots.
-// Aquí se cierra esa puerta sin tocar el flujo de login:
+// IMPORTANTE - ALCANCE REAL (verificado en produccion, 29/09/2026):
+// este middleware NO se ejecuta en el hosting actual. Firebase Hosting con
+// "frameworksBackend" compila el bundle (Next lo reporta como "ƒ Middleware")
+// pero no lo invoca: se comprobo con una cabecera de diagnostico en todas las
+// rutas, que nunca llego al cliente. Por eso el bloqueo por User-Agent aqui es
+// solo una capa preventiva que se activara sola al migrar a un runtime que lo
+// ejecute (Firebase App Hosting / Cloud Run).
 //
-//   - Si la petición a una ruta privada viene de un rastreador, se responde 403
-//     con cuerpo mínimo. El bot nunca recibe el shell del panel.
-//   - Toda ruta privada (y /thanks) sale siempre con X-Robots-Tag noindex, para
-//     que ni siquiera un rastreador que pase se la indexe.
-//   - Las páginas públicas no se tocan: siguen abiertas para Google-Extended,
-//     Googlebot y el resto de agentes de IA.
+// Lo que SI protege hoy, y fue verificado respondiendo sin sesion:
+//   - /api/invitations/*        -> 401 {"error":"No autenticado"}
+//   - /api/admin/*              -> 401/403 {"error":"No autorizado"}
+//   - /api/cron/*               -> exige CRON_SECRET
+//   - Reglas de Firestore: solo el ownerUid o un admin leen/escriben.
+// Las cabeceras noindex de /admin y /dashboard las aplica el edge, en
+// firebase.json, que es la capa que si responde hoy.
 //
-// La autorización real de datos no depende de esto: la siguen aplicando las
-// reglas de Firestore y la comprobación de rol en las APIs de admin.
+// Este archivo queda preparado para cuando el runtime lo ejecute: si un
+// rastreador pide /admin o /dashboard, recibe 403 en vez del shell del panel.
 // ============================================================================
 import { NextRequest, NextResponse } from "next/server";
 
@@ -70,8 +75,7 @@ export function middleware(req: NextRequest) {
       });
     }
 
-    // Navegador real sin sesión: el layout cliente redirige a /login. Aquí solo
-    // se marca como no indexable.
+    // Navegador real sin sesión: el layout cliente redirige a /login.
     const res = NextResponse.next();
     res.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet");
     res.headers.set("Cache-Control", "no-store");
@@ -90,6 +94,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Solo las rutas que necesitan intervención; el resto se sirve normal.
   matcher: ["/admin/:path*", "/dashboard/:path*", "/thanks", "/login"],
 };

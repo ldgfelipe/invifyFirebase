@@ -23,6 +23,28 @@
           { "key": "Cache-Control", "value": "public, max-age=300, stale-while-revalidate=600" },
           { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive, nosnippet, noimageindex" }
         ]
+      },
+      {
+        "source": "/admin{,/**}",
+        "headers": [
+          { "key": "Cache-Control", "value": "private, no-store, no-cache, must-revalidate, max-age=0" },
+          { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive, nosnippet" },
+          { "key": "X-Frame-Options", "value": "DENY" }
+        ]
+      },
+      {
+        "source": "/dashboard{,/**}",
+        "headers": [
+          { "key": "Cache-Control", "value": "private, no-store, no-cache, must-revalidate, max-age=0" },
+          { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive, nosnippet" },
+          { "key": "X-Frame-Options", "value": "DENY" }
+        ]
+      },
+      {
+        "source": "/login",
+        "headers": [
+          { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+        ]
       }
     ]
   },
