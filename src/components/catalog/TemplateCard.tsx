@@ -9,9 +9,20 @@ import Link from "next/link";
 import { useLanguage } from "@/lib/i18n/provider";
 import type { Template } from "@/lib/types";
 
-function fallbackThumb(): string {
-  // Retrocede al lock 1 si la URL está vacía o es inválida.
-  return "/api/thumb/lock/1";
+/**
+ * Miniatura de la tarjeta. Respeta la URL real de la plantilla (el seed usa
+ * /api/thumb/<id>, que se sirve con los colores y el motivo de su categoría).
+ * Solo si viene vacía o mal formada se deriva un lock estable del id, para que
+ * cada plantilla siga teniendo su propia imagen y no todas la misma.
+ */
+function resolveThumb(templateId: string, thumbnailUrl?: string): string {
+  const url = (thumbnailUrl ?? "").trim();
+  if (url.startsWith("/api/thumb/") || url.startsWith("https://")) return url;
+  let h = 0;
+  for (let i = 0; i < templateId.length; i++) {
+    h = (Math.imul(h, 31) + templateId.charCodeAt(i)) >>> 0;
+  }
+  return `/api/thumb/lock/${(h % 90) + 1}`;
 }
 
 export function TemplateCard({
@@ -22,9 +33,7 @@ export function TemplateCard({
   categoryLabel?: string;
 }) {
   const { t } = useLanguage();
-  const thumb = template.thumbnailUrl && template.thumbnailUrl.startsWith("/api/thumb/lock/")
-    ? template.thumbnailUrl
-    : fallbackThumb();
+  const thumb = resolveThumb(template.id, template.thumbnailUrl);
 
   return (
     <div className="card group overflow-hidden hover:shadow-lg transition">
