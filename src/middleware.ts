@@ -66,9 +66,6 @@ function startsWithAny(pathname: string, prefixes: string[]): boolean {
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-export function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
-
   if (startsWithAny(pathname, PRIVATE_PREFIXES)) {
     if (isCrawler(req.headers.get("user-agent"))) {
       // 403 con cuerpo mínimo: el rastreador no obtiene el shell del panel.
