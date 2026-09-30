@@ -3,7 +3,6 @@
 // la plantilla preseleccionada desde la URL (?template=ID).
 // ============================================================================
 import type { Metadata } from "next";
-import { Suspense } from "react";
 import { collection, query, orderBy, getDocs } from "firebase/firestore";
 import { serverDb } from "@/lib/firebase/serverClient";
 import { getSiteSettings } from "@/lib/site";
@@ -23,18 +22,25 @@ export const metadata: Metadata = {
 export default async function PricingPage({
   searchParams,
 }: {
-  searchParams: { template?: string };
+  searchParams: { template?: string; paypal_order?: string; mp_order?: string };
 }) {
   const snap = await getDocs(query(collection(serverDb, "plans"), orderBy("price", "asc")));
   const plans = snap.docs.map((d) => d.data() as Plan);
   const settings = await getSiteSettings();
 
+  // Los parámetros de retorno del pago llegan como props desde el servidor.
+  // Antes se leían con useSearchParams() en el cliente, lo que obligaba a
+  // envolverlo en Suspense y dejaba el HTML del servidor como un "Cargando…"
+  // sin ningún encabezado: la página de precios era invisible para el SEO.
   return (
     <>
       <PromoBanner banner={settings.banner} page="pricing" />
-      <Suspense fallback={<div className="text-center py-20 text-ink/60">Cargando…</div>}>
-        <PricingFlow plans={plans} templateId={searchParams.template} />
-      </Suspense>
+      <PricingFlow
+        plans={plans}
+        templateId={searchParams.template}
+        paypalOrder={searchParams.paypal_order}
+        mpOrder={searchParams.mp_order}
+      />
     </>
   );
 }

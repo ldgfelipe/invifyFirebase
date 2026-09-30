@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/lib/i18n/provider";
 import type { Plan } from "@/lib/types";
@@ -86,14 +86,17 @@ function EmbeddedCheckout({
 export function PricingFlow({
   plans,
   templateId,
+  paypalOrder,
+  mpOrder,
 }: {
   plans: Plan[];
   templateId?: string;
+  paypalOrder?: string;
+  mpOrder?: string;
 }) {
   const { user, loading } = useAuth();
   const { locale } = useLanguage();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
@@ -124,8 +127,8 @@ export function PricingFlow({
   }, []);
 
   const handleRedirectReturn = useCallback(() => {
-    const paypal = searchParams.get("paypal_order");
-    const mp = searchParams.get("mp_order");
+    const paypal = paypalOrder;
+    const mp = mpOrder;
     const provider = paypal ? "paypal" : mp ? "mercadopago" : null;
     if (provider && user) {
       setBusyPlan("__verify__");
@@ -157,7 +160,7 @@ export function PricingFlow({
         }
       })();
     }
-  }, [searchParams, user, router, isTestMode]);
+  }, [paypalOrder, mpOrder, user, router, isTestMode]);
 
   useEffect(() => {
     handleRedirectReturn();
