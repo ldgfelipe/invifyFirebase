@@ -1,28 +1,28 @@
 // ============================================================================
-// MIDDLEWARE - Barrera de rutas privadas para rastreadores.
+// MIDDLEWARE - Barrera de rutas privadas.
 //
-// ALCANCE REAL (verificado en produccion, 29/09/2026 con tres pruebas):
-// este middleware NO se ejecuta en el hosting actual. Firebase Hosting con
-// "frameworksBackend" compila el bundle (Next lo reporta como "f Middleware")
-// pero nunca lo invoca. Las pruebas fueron:
-//   1. Cabecera de diagnostico en todas las rutas: nunca llego al cliente.
-//   2. 403 a un user-agent de Google-Extended: seguia devolviendo 200.
-//   3. Redirect incondicional en /thanks: tampoco se produjo.
-// Ojo con un falso positivo: /thanks y /login devuelven "X-Robots-Tag: noindex,
-// nofollow" porque Next lo genera a partir de la metadata robots, no porque pase
-// por aqui. Y /admin y /dashboard reciben sus cabeceras desde firebase.json,
-// que si las aplica el edge.
+// ESTADO REAL, verificado en App Hosting con sondas (29/09/2026):
 //
-// Lo que SI protege hoy, verificado respondiendo sin sesion:
+// 1. El middleware SI se ejecuta. Antes se creyo que no, porque los deploys de
+//    prueba se hicieron con "firebase deploy --only hosting", que va al hosting
+//    clasico (invify-online.web.app) y no a App Hosting, que es el que sirve
+//    invify.online. Con un push a git y una sonda en una ruta inexistente, la
+//    respuesta fue la del middleware. Tarda unos 5 minutos en desplegar.
+//
+// 2. El bloqueo por User-Agent NO puede funcionar en App Hosting. El runtime
+//    sobrescribe la cabecera user-agent con el literal "Google" (6 caracteres)
+//    en cualquier peticion, tanto por el dominio custom como por la URL de
+//    App Hosting. Por eso isCrawler() nunca coincide. No es un problema de la
+//    lista de tokens ni de codigo: el dato no llega.
+//
+// 3. Para devolver 401/403 a quien no tenga sesion hay que usar una cookie de
+//    sesion de Firebase verificada aqui, no el user-agent.
+//
+// Lo que protege hoy el sitio, verificado respondiendo sin sesion:
 //   - /api/invitations/*  -> 401 {"error":"No autenticado"}
 //   - /api/admin/*        -> 401/403 {"error":"No autorizado"}
 //   - /api/cron/*         -> exige CRON_SECRET
 //   - Reglas de Firestore: solo ownerUid o admin leen y escriben.
-//
-// Este archivo se mantiene porque es la logica correcta y se activara sola al
-// migrar a un runtime que ejecute middleware (Firebase App Hosting / Cloud Run).
-// Si se busca un 403 real a rastreadores hoy, la via es autenticacion por cookie
-// de sesion validada en el servidor, no el user-agent.
 // ============================================================================
 import { NextRequest, NextResponse } from "next/server";
 
@@ -66,17 +66,8 @@ function startsWithAny(pathname: string, prefixes: string[]): boolean {
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // SONDA: ruta que no existe en la app. Devuelve el user-agent tal cual lo
-  // ve el middleware, para saber si App Hosting lo reenvia.
-  if (pathname === "/crawler-probe") {
-    const ua = req.headers.get("user-agent");
-    const todos = [...req.headers.keys()].sort().join(",");
-    const c = isCrawler(ua);
-    return new NextResponse(
-      `status=${c ? 419 : 418}\nua-raw=${JSON.stringify(ua)}\nua-len=${ua ? ua.length : -1}\nheaders=${todos}`,
-      { status: c ? 419 : 418, headers: { "Content-Type": "text/plain; charset=utf-8" } }
-    );
-  }
+export function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
 
   if (startsWithAny(pathname, PRIVATE_PREFIXES)) {
     if (isCrawler(req.headers.get("user-agent"))) {
@@ -88,15 +79,6 @@ export function middleware(req: NextRequest) {
           "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet",
           "Cache-Control": "no-store",
         },
-      });
-    }
-
-    // SONDA TEMPORAL: 417 confirma que la rama privada se alcanza con un
-    // navegador normal. Se retira en el siguiente commit.
-    if (pathname === "/admin") {
-      return new NextResponse("RAMA-PRIV-ALCANZADA", {
-        status: 417,
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
       });
     }
 
@@ -119,5 +101,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/crawler-probe", "/admin/:path*", "/dashboard/:path*", "/thanks", "/login"],
+  matcher: ["/admin/:path*", "/dashboard/:path*", "/thanks", "/login"],
 };
