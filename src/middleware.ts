@@ -66,6 +66,15 @@ function startsWithAny(pathname: string, prefixes: string[]): boolean {
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // SONDA: ruta que no existe en la app. Si el middleware se ejecuta devuelve
+  // 418 con este cuerpo; si no, 404. No afecta a ninguna pagina real.
+  if (pathname === "/crawler-probe") {
+    return new NextResponse("MIDDLEWARE-OK", {
+      status: 418,
+      headers: { "Content-Type": "text/plain; charset=utf-8" },
+    });
+  }
+
   if (startsWithAny(pathname, PRIVATE_PREFIXES)) {
     if (isCrawler(req.headers.get("user-agent"))) {
       // 403 con cuerpo mínimo: el rastreador no obtiene el shell del panel.
@@ -98,5 +107,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/dashboard/:path*", "/thanks", "/login"],
+  matcher: ["/crawler-probe", "/admin/:path*", "/dashboard/:path*", "/thanks", "/login"],
 };

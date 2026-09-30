@@ -67,7 +67,7 @@ export default function RootLayout({
         {/* Scripts de marketing configurables desde /admin/settings */}
         <MarketingHead />
       </head>
-      <body className="min-h-screen flex flex-col">
+      <body data-probe="BUILD-PROBE-9931" className="min-h-screen flex flex-col">
         <AuthProvider>
           <LanguageProvider>
             <SiteHeader />
