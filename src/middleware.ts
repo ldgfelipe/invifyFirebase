@@ -66,11 +66,12 @@ function startsWithAny(pathname: string, prefixes: string[]): boolean {
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // SONDA: ruta que no existe en la app. Si el middleware se ejecuta devuelve
-  // 418 con este cuerpo; si no, 404. No afecta a ninguna pagina real.
+  // SONDA: ruta que no existe en la app.
+  //   418 = llego sin parecer crawler,  419 = llego y es crawler
   if (pathname === "/crawler-probe") {
-    return new NextResponse("MIDDLEWARE-OK", {
-      status: 418,
+    const c = isCrawler(req.headers.get("user-agent"));
+    return new NextResponse(c ? "CRAWLER-VISIBLE" : "UA-NO-VISIBLE", {
+      status: c ? 419 : 418,
       headers: { "Content-Type": "text/plain; charset=utf-8" },
     });
   }
@@ -85,6 +86,15 @@ export function middleware(req: NextRequest) {
           "X-Robots-Tag": "noindex, nofollow, noarchive, nosnippet",
           "Cache-Control": "no-store",
         },
+      });
+    }
+
+    // SONDA TEMPORAL: 417 confirma que la rama privada se alcanza con un
+    // navegador normal. Se retira en el siguiente commit.
+    if (pathname === "/admin") {
+      return new NextResponse("RAMA-PRIV-ALCANZADA", {
+        status: 417,
+        headers: { "Content-Type": "text/plain; charset=utf-8" },
       });
     }
 
