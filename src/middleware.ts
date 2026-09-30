@@ -66,14 +66,16 @@ function startsWithAny(pathname: string, prefixes: string[]): boolean {
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // SONDA: ruta que no existe en la app.
-  //   418 = llego sin parecer crawler,  419 = llego y es crawler
+  // SONDA: ruta que no existe en la app. Devuelve el user-agent tal cual lo
+  // ve el middleware, para saber si App Hosting lo reenvia.
   if (pathname === "/crawler-probe") {
-    const c = isCrawler(req.headers.get("user-agent"));
-    return new NextResponse(c ? "CRAWLER-VISIBLE" : "UA-NO-VISIBLE", {
-      status: c ? 419 : 418,
-      headers: { "Content-Type": "text/plain; charset=utf-8" },
-    });
+    const ua = req.headers.get("user-agent");
+    const todos = [...req.headers.keys()].sort().join(",");
+    const c = isCrawler(ua);
+    return new NextResponse(
+      `status=${c ? 419 : 418}\nua-raw=${JSON.stringify(ua)}\nua-len=${ua ? ua.length : -1}\nheaders=${todos}`,
+      { status: c ? 419 : 418, headers: { "Content-Type": "text/plain; charset=utf-8" } }
+    );
   }
 
   if (startsWithAny(pathname, PRIVATE_PREFIXES)) {
