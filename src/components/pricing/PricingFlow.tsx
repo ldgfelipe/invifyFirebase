@@ -94,7 +94,7 @@ export function PricingFlow({
   paypalOrder?: string;
   mpOrder?: string;
 }) {
-  const { user, loading } = useAuth();
+  const { user } = useAuth();
   const { locale } = useLanguage();
   const router = useRouter();
   const [busyPlan, setBusyPlan] = useState<string | null>(null);
@@ -166,15 +166,11 @@ export function PricingFlow({
     handleRedirectReturn();
   }, [handleRedirectReturn]);
 
-  if (loading || busyPlan === "__verify__") {
-    return <div className="text-center py-20 text-ink/60">Cargando…</div>;
-  }
-
-  if (!user) {
-    const q = templateId ? `?redirect=/pricing&template=${templateId}` : "?redirect=/pricing";
-    router.replace(`/login${q}`);
-    return <div className="text-center py-20 text-ink/60">Redirigiendo…</div>;
-  }
+  // La lista de planes se muestra siempre, con o sin sesión. Antes el componente
+  // devolvía "Cargando…" mientras useAuth resuelvía y, si no había usuario,
+  // redirigía a /login: la página de precios quedaba vacía en el HTML del
+  // servidor (Google no veía ni un h1 ni los planes) y además obligaba a
+  // registrarse para conocer los precios. El login se pide al elegir plan.
 
   const visiblePlans = plans.filter((p) => isPlanVisible(p, locale));
 
@@ -195,6 +191,13 @@ export function PricingFlow({
   }
 
   function selectPlan(plan: Plan) {
+    // El pago exige sesión, pero pedirla aquí y no al entrar: cualquiera puede
+    // ver los precios antes de decidir registrarse.
+    if (!user) {
+      const q = templateId ? `?redirect=/pricing&template=${templateId}` : "?redirect=/pricing";
+      router.push(`/login${q}`);
+      return;
+    }
     setSelectedPlan(plan);
     setError(null);
     setStep("pay");
@@ -358,6 +361,12 @@ export function PricingFlow({
           {visiblePlans.length === 0 && (
             <p className="text-center text-ink/50 py-10">
               {locale === "en" ? "No plans available." : "No hay planes disponibles."}
+            </p>
+          )}
+
+          {busyPlan === "__verify__" && (
+            <p className="text-center text-ink/60 py-6" role="status" aria-live="polite">
+              {locale === "en" ? "Verifying your payment…" : "Verificando tu pago…"}
             </p>
           )}
         </>
