@@ -17,6 +17,12 @@ const nextConfig = {
     // Habilita la generación de sitemap/robots en App Router.
     typedRoutes: false,
   },
+  // Sin bloque headers() a proposito: se probo y este runtime descarta las
+  // cabeceras de respuesta que Next anade (HSTS, nosniff, Referrer-Policy,
+  // X-Frame-Options) igual que hace con las de firebase.json. Solo pasan
+  // X-Robots-Tag y Cache-Control. Dejarlo aqui seria una config muerta que
+  // aparenta proteger el sitio. ParaServir estas cabeceras de verdad hay que
+  // migrar a Firebase App Hosting o poner Cloudflare delante.
 };
 
 export default nextConfig;

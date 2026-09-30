@@ -18,17 +18,6 @@
     },
     "headers": [
       {
-        "source": "**",
-        "headers": [
-          { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains; preload" },
-          { "key": "X-Content-Type-Options", "value": "nosniff" },
-          { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-          { "key": "X-Frame-Options", "value": "SAMEORIGIN" },
-          { "key": "Cross-Origin-Opener-Policy", "value": "same-origin-allow-popups" },
-          { "key": "Permissions-Policy", "value": "camera=(), microphone=(), geolocation=(), interest-cohort=()" }
-        ]
-      },
-      {
         "source": "/i/**",
         "headers": [
           { "key": "Cache-Control", "value": "public, max-age=300, stale-while-revalidate=600" },
@@ -39,22 +28,14 @@
         "source": "/admin{,/**}",
         "headers": [
           { "key": "Cache-Control", "value": "private, no-store, no-cache, must-revalidate, max-age=0" },
-          { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive, nosnippet" },
-          { "key": "X-Frame-Options", "value": "DENY" }
+          { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive, nosnippet" }
         ]
       },
       {
         "source": "/dashboard{,/**}",
         "headers": [
           { "key": "Cache-Control", "value": "private, no-store, no-cache, must-revalidate, max-age=0" },
-          { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive, nosnippet" },
-          { "key": "X-Frame-Options", "value": "DENY" }
-        ]
-      },
-      {
-        "source": "/login",
-        "headers": [
-          { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+          { "key": "X-Robots-Tag", "value": "noindex, nofollow, noarchive, nosnippet" }
         ]
       }
     ]

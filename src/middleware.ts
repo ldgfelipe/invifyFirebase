@@ -1,24 +1,28 @@
 // ============================================================================
-// MIDDLEWARE - Barrera de rutas privadas para rastreadores y usuarios.
+// MIDDLEWARE - Barrera de rutas privadas para rastreadores.
 //
-// IMPORTANTE - ALCANCE REAL (verificado en produccion, 29/09/2026):
+// ALCANCE REAL (verificado en produccion, 29/09/2026 con tres pruebas):
 // este middleware NO se ejecuta en el hosting actual. Firebase Hosting con
-// "frameworksBackend" compila el bundle (Next lo reporta como "ƒ Middleware")
-// pero no lo invoca: se comprobo con una cabecera de diagnostico en todas las
-// rutas, que nunca llego al cliente. Por eso el bloqueo por User-Agent aqui es
-// solo una capa preventiva que se activara sola al migrar a un runtime que lo
-// ejecute (Firebase App Hosting / Cloud Run).
+// "frameworksBackend" compila el bundle (Next lo reporta como "f Middleware")
+// pero nunca lo invoca. Las pruebas fueron:
+//   1. Cabecera de diagnostico en todas las rutas: nunca llego al cliente.
+//   2. 403 a un user-agent de Google-Extended: seguia devolviendo 200.
+//   3. Redirect incondicional en /thanks: tampoco se produjo.
+// Ojo con un falso positivo: /thanks y /login devuelven "X-Robots-Tag: noindex,
+// nofollow" porque Next lo genera a partir de la metadata robots, no porque pase
+// por aqui. Y /admin y /dashboard reciben sus cabeceras desde firebase.json,
+// que si las aplica el edge.
 //
-// Lo que SI protege hoy, y fue verificado respondiendo sin sesion:
-//   - /api/invitations/*        -> 401 {"error":"No autenticado"}
-//   - /api/admin/*              -> 401/403 {"error":"No autorizado"}
-//   - /api/cron/*               -> exige CRON_SECRET
-//   - Reglas de Firestore: solo el ownerUid o un admin leen/escriben.
-// Las cabeceras noindex de /admin y /dashboard las aplica el edge, en
-// firebase.json, que es la capa que si responde hoy.
+// Lo que SI protege hoy, verificado respondiendo sin sesion:
+//   - /api/invitations/*  -> 401 {"error":"No autenticado"}
+//   - /api/admin/*        -> 401/403 {"error":"No autorizado"}
+//   - /api/cron/*         -> exige CRON_SECRET
+//   - Reglas de Firestore: solo ownerUid o admin leen y escriben.
 //
-// Este archivo queda preparado para cuando el runtime lo ejecute: si un
-// rastreador pide /admin o /dashboard, recibe 403 en vez del shell del panel.
+// Este archivo se mantiene porque es la logica correcta y se activara sola al
+// migrar a un runtime que ejecute middleware (Firebase App Hosting / Cloud Run).
+// Si se busca un 403 real a rastreadores hoy, la via es autenticacion por cookie
+// de sesion validada en el servidor, no el user-agent.
 // ============================================================================
 import { NextRequest, NextResponse } from "next/server";
 
