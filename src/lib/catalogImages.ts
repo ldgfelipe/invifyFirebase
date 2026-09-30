@@ -9,6 +9,14 @@
 /** Hosts que ya no sirven imágenes por hotlink. */
 const DEAD_IMAGE_HOSTS = ["loremflickr.com", "picsum.photos"];
 
+/** Versión del placeholder SVG: súbela al cambiar su diseño. */
+const THUMB_VERSION = "?v=2";
+
+/** Añade (o refresca) el parámetro de versión sin duplicarlo. */
+function withVersion(url: string): string {
+  return url.includes("?v=") ? url : `${url}${THUMB_VERSION}`;
+}
+
 /** ¿La URL apunta a un host que devuelve 401? */
 export function isDeadImageUrl(url: string | undefined | null): boolean {
   const u = (url ?? "").trim();
@@ -21,13 +29,16 @@ export function isDeadImageUrl(url: string | undefined | null): boolean {
  *  1. URL local /api/thumb/... (la del seed) o remota viva: se respeta.
  *  2. /api/thumb/<id>: SVG con los colores y el motivo de su categoría.
  *  3. Lock derivado del id, si tampoco se puede leer la plantilla.
+ *
+ * `?v=2` versiona la URL para que el CDN no siga sirviendo el SVG anterior
+ * cuando cambia su código. Bájalo solo si cambia el diseño del placeholder.
  */
 export function resolveTemplateThumb(templateId: string, thumbnailUrl?: string): string {
   const url = (thumbnailUrl ?? "").trim();
-  if (url.startsWith("/api/thumb/")) return url;
+  if (url.startsWith("/api/thumb/")) return withVersion(url);
   if (url.startsWith("http") && !isDeadImageUrl(url)) return url;
-  if (templateId) return `/api/thumb/${encodeURIComponent(templateId)}`;
-  return "/api/thumb/lock/1";
+  if (templateId) return `/api/thumb/${encodeURIComponent(templateId)}${THUMB_VERSION}`;
+  return `/api/thumb/lock/1${THUMB_VERSION}`;
 }
 
 /** Imagen de fondo del hero: si el host está muerto, se omite el velo. */
