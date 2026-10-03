@@ -82,7 +82,7 @@ const PAGES = [
     metaDescription:
       "Invitaciones digitales para bodas, cumpleaños, baby showers, bautizos y eventos corporativos. Personalizables y con RSVP.",
     modules: [
-      hero("Un invitación para cada celebración", "Servicios"),
+      hero("Una invitación para cada celebración", "Servicios"),
       text(
         "s1",
         "Bodas",
