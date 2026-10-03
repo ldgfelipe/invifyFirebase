@@ -67,7 +67,7 @@ function findImage(inv: any): string | undefined {
   }
   if (usable(inv.meta?.imageUrl)) return inv.meta.imageUrl;
 
-  const templateId = inv.builderConfig?.templateId;
+  const templateId = inv.templateId ?? inv.builderConfig?.templateId;
   if (typeof templateId === "string" && templateId) return resolveTemplateOgImage(templateId);
   return undefined;
 }
