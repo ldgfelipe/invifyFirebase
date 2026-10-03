@@ -30,6 +30,9 @@ export interface UserProfile {
 }
 
 // ----------------------------- Catálogo -------------------------------------
+import type { LoaderAnimationSetting } from "@/lib/loaderAnimations";
+
+export type { LoaderAnimationSetting, LoaderAnimationId } from "@/lib/loaderAnimations";
 export type TemplateCategory = "boda" | "cumpleanos" | "babyshower" | "bautizo" | "corporativo";
 
 export interface Template {
@@ -240,6 +243,11 @@ export interface PreloaderModule extends BaseModule {
   type: "preloader";
   imageUrl?: string;
   text?: string;
+  /**
+   * Animación de la pantalla de carga. "random" (o ausente) hace que cada
+   * visita elija una al azar; ver src/lib/loaderAnimations.ts.
+   */
+  animation?: LoaderAnimationSetting;
 }
 
 export interface HeaderModule extends BaseModule {

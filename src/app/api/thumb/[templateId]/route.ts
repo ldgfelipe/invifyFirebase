@@ -1,6 +1,6 @@
 // ============================================================================
 // API /api/thumb/[templateId]
-// Miniatura SVG por plantilla (1200x630) construida con el diseño REAL de su
+// Miniatura SVG por plantilla construida con el diseño REAL de su
 // builderConfig: fondo, color primario, tipografía y el texto real del módulo
 // header (título, subtítulo, nombres y fecha).
 //
@@ -8,6 +8,16 @@
 // loremflickr, que hoy responde 401 ante hotlink, así que no hay ninguna foto
 // real guardada que mostrar. Cuando el admin suba una foto por plantilla, esta
 // ruta deja de usarse (ver resolveTemplateThumb).
+//
+// FORMATOS (?size=...)
+//   card (por defecto)  1000x1250  vertical 4:5. Debe coincidir con la tarjeta
+//                                del catálogo, que es aspect-[4/5]: con un SVG
+//                                apaisado el `object-cover` recortaba los lados
+//                                y solo enseñaba el fondo vacío del tema.
+//   og                  1200x630   horizontal, para compartir en redes.
+//
+// El layout es proporcional al ancho de la tarjeta, no a coordenadas fijas, así
+// que ambos formatos salen bien sin duplicar el código de dibujo.
 //
 // NOTA: dentro de un atributo SVG el color va en hexadecimal CRUDO. Codificarlo
 // como %23 (URL) lo vuelve inválido y el navegador dibuja la figura invisible.
@@ -18,8 +28,17 @@ import { adminDb } from "@/lib/firebase/admin";
 
 export const runtime = "nodejs";
 
-const W = 1200;
-const H = 630;
+const FORMATS = {
+  card: { w: 1000, h: 1250 },
+  og: { w: 1200, h: 630 },
+} as const;
+
+type FormatKey = keyof typeof FORMATS;
+
+function resolveFormat(req: NextRequest): FormatKey {
+  const raw = (req.nextUrl.searchParams.get("size") ?? "").toLowerCase();
+  return raw in FORMATS ? (raw as FormatKey) : "card";
+}
 
 function normalizeThemeColor(c: string | undefined): string | null {
   if (!c) return null;
@@ -164,59 +183,78 @@ export async function GET(
     ? "Georgia, 'Times New Roman', serif"
     : "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 
-  // ---- layout: tarjeta de invitación centrada sobre el fondo del tema ----
-  const cardX = 96;
-  const cardY = 70;
-  const cardW = 560;
-  const cardH = 490;
+  const { w: W, h: H } = FORMATS[resolveFormat(req)];
+
+  // ---- tarjeta de invitación centrada, con proporción de carta ----
+  // Todo se mide como fracción del ancho/alto de la tarjeta, de modo que el
+  // mismo código dibuja bien el 4:5 del catálogo y el 1.91:1 de redes.
+  let cardH = H * 0.82;
+  let cardW = cardH * 0.72;
+  if (cardW > W * 0.82) {
+    cardW = W * 0.82;
+    cardH = cardW / 0.72;
+  }
+  const cardX = Math.round((W - cardW) / 2);
+  const cardY = Math.round((H - cardH) / 2);
   const cardFill = isDark ? mix(bg, "#ffffff", 0.08) : "#ffffff";
   const cardStroke = isDark ? mix(bg, "#ffffff", 0.3) : mix(primary, "#ffffff", 0.55);
 
   // ---- textos ----
   const cx = cardX + cardW / 2;
-  const maxW = cardW - 88;
+  const maxW = cardW * 0.78;
 
-  const nameSize = title.length > 26 ? 34 : title.length > 16 ? 42 : 52;
-  const titleLines = wrapText(title, nameSize, maxW, 2, serif ? 0.56 : 0.54);
-  const titleY0 = 232;
+  const titleSize = cardW * 0.072;
+  const titleLead = titleSize * 1.18;
+  const subSize = cardW * 0.028;
+  const subLead = subSize * 1.32;
+  const footSize = cardW * 0.026;
+  const footLead = footSize * 1.35;
+  const subGap = cardW * 0.026;
 
-  const subLines = subtitle ? wrapText(subtitle, 20, maxW, 2, 0.5) : [];
-  const subY0 = titleY0 + titleLines.length * (nameSize + 6) + 18;
+  const titleLines = wrapText(title, titleSize, maxW, 2, serif ? 0.56 : 0.54);
+  const titleY0 = cardY + cardH * 0.47;
+  const subLines = subtitle ? wrapText(subtitle, subSize, maxW, 2, 0.5) : [];
+  const subY0 = titleY0 + titleLines.length * titleLead + subGap;
 
   const footParts = [names, dateText].filter(Boolean);
   const footLines = footParts.length
-    ? wrapText(footParts.join("  ·  "), 19, maxW, 2, 0.52)
+    ? wrapText(footParts.join("  ·  "), footSize, maxW, 2, 0.52)
     : [];
+  const footY0 = cardY + cardH - cardH * 0.105;
 
   const text = (x: number, y: number, size: number, fill: string, s: string, weight = "", spacing = 0) =>
-    `<text x="${x}" y="${y}" text-anchor="middle" font-family="${font}" font-size="${size}" fill="${fill}"${weight ? ` font-weight="${weight}"` : ""}${spacing ? ` letter-spacing="${spacing}"` : ""}>${escapeXml(s)}</text>`;
+    `<text x="${x}" y="${y}" text-anchor="middle" font-family="${font}" font-size="${size.toFixed(1)}" fill="${fill}"${weight ? ` font-weight="${weight}"` : ""}${spacing ? ` letter-spacing="${spacing}"` : ""}>${escapeXml(s)}</text>`;
+
+  const r1 = Math.min(W, H) * 0.36;
+  const r2 = Math.min(W, H) * 0.28;
+  const r3 = Math.min(W, H) * 0.22;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeXml(title)}">
   <rect width="${W}" height="${H}" fill="${bg}"/>
   <g opacity=".55">
-    <circle cx="1060" cy="90" r="230" fill="${primary}" opacity=".10"/>
-    <circle cx="1120" cy="600" r="180" fill="${primary}" opacity=".08"/>
-    <circle cx="90" cy="590" r="140" fill="${primary}" opacity=".07"/>
+    <circle cx="${(W - r1 * 0.45).toFixed(0)}" cy="${(r1 * 0.39).toFixed(0)}" r="${r1.toFixed(0)}" fill="${primary}" opacity=".10"/>
+    <circle cx="${(W - r2 * 0.3).toFixed(0)}" cy="${(H - r2 * 0.45).toFixed(0)}" r="${r2.toFixed(0)}" fill="${primary}" opacity=".08"/>
+    <circle cx="${(r3 * 0.64).toFixed(0)}" cy="${(H - r3 * 0.5).toFixed(0)}" r="${r3.toFixed(0)}" fill="${primary}" opacity=".07"/>
   </g>
 
-  <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="18" fill="${cardFill}" stroke="${cardStroke}" stroke-width="2"/>
-  <rect x="${cardX + 18}" y="${cardY + 18}" width="${cardW - 36}" height="${cardH - 36}" rx="12" fill="none" stroke="${cardStroke}" stroke-width="1" opacity=".7"/>
+  <rect x="${cardX}" y="${cardY}" width="${cardW.toFixed(0)}" height="${cardH.toFixed(0)}" rx="${(cardW * 0.032).toFixed(0)}" fill="${cardFill}" stroke="${cardStroke}" stroke-width="2"/>
+  <rect x="${(cardX + cardW * 0.032).toFixed(0)}" y="${(cardY + cardW * 0.032).toFixed(0)}" width="${(cardW * 0.936).toFixed(0)}" height="${(cardH - cardW * 0.064).toFixed(0)}" rx="${(cardW * 0.022).toFixed(0)}" fill="none" stroke="${cardStroke}" stroke-width="1" opacity=".7"/>
 
   <g>
-    <path d="M${cx - 17} 150c0-11 8-19 17-19s17 8 17 19c0 13-17 27-17 27s-17-14-17-27z" fill="${primary}" opacity=".9"/>
-    <circle cx="${cx}" cy="150" r="46" fill="none" stroke="${primary}" stroke-width="1.5" opacity=".45"/>
+    <path d="M${(cx - cardW * 0.03).toFixed(0)} ${(cardY + cardH * 0.2).toFixed(0)}c0-${(cardW * 0.032).toFixed(0)} ${(cardW * 0.014).toFixed(0)}-${(cardW * 0.056).toFixed(0)} ${(cardW * 0.03).toFixed(0)}-${(cardW * 0.056)}s${(cardW * 0.03).toFixed(0)} ${(cardW * 0.024).toFixed(0)} ${(cardW * 0.03).toFixed(0)} ${(cardW * 0.056)}c0 ${(cardW * 0.042).toFixed(0)}-${(cardW * 0.03).toFixed(0)} ${(cardW * 0.087).toFixed(0)}-${(cardW * 0.03).toFixed(0)} ${(cardW * 0.087)}s-${(cardW * 0.03).toFixed(0)}-${(cardW * 0.045).toFixed(0)}-${(cardW * 0.03).toFixed(0)}-${(cardW * 0.087)}z" fill="${primary}" opacity=".9"/>
+    <circle cx="${cx.toFixed(0)}" cy="${(cardY + cardH * 0.2).toFixed(0)}" r="${(cardW * 0.082).toFixed(0)}" fill="none" stroke="${primary}" stroke-width="1.5" opacity=".45"/>
   </g>
 
-  <rect x="${cx - 46}" y="${titleY0 - 62}" width="92" height="2" fill="${primary}" opacity=".55"/>
+  <rect x="${(cx - cardW * 0.064).toFixed(0)}" y="${(cardY + cardH * 0.325).toFixed(0)}" width="${(cardW * 0.128).toFixed(0)}" height="2" fill="${primary}" opacity=".55"/>
 
-  ${titleLines.map((l, i) => text(cx, titleY0 + i * (nameSize + 6), nameSize, ink, l, "600")).join("\n  ")}
-  ${subLines.map((l, i) => text(cx, subY0 + i * 26, 20, soft, l)).join("\n  ")}
+  ${titleLines.map((l, i) => text(cx, titleY0 + i * titleLead, titleSize, ink, l, "600")).join("\n  ")}
+  ${subLines.map((l, i) => text(cx, subY0 + i * subLead, subSize, soft, l)).join("\n  ")}
 
-  <rect x="${cx - 52}" y="${cardY + cardH - 104}" width="104" height="1" fill="${primary}" opacity=".5"/>
-  ${footLines.map((l, i) => text(cx, cardY + cardH - 74 + i * 26, 19, soft, l)).join("\n  ")}
+  <rect x="${(cx - cardW * 0.072).toFixed(0)}" y="${(cardY + cardH - cardH * 0.175).toFixed(0)}" width="${(cardW * 0.144).toFixed(0)}" height="1" fill="${primary}" opacity=".5"/>
+  ${footLines.map((l, i) => text(cx, footY0 + i * footLead, footSize, soft, l)).join("\n  ")}
 
-  ${text(W - 48, H - 46, 22, primary, "invify", "700", 3)}
-  ${category ? text(48, H - 46, 15, soft, category.toUpperCase(), "", 3) : ""}
+  ${text(W - cardW * 0.075, H - cardW * 0.075, cardW * 0.042, primary, "invify", "700", 3)}
+  ${category ? text(cardW * 0.075, H - cardW * 0.075, cardW * 0.03, soft, category.toUpperCase(), "", 3) : ""}
 </svg>`;
 
   return new NextResponse(svg, {

@@ -10,7 +10,7 @@
 const DEAD_IMAGE_HOSTS = ["loremflickr.com", "picsum.photos"];
 
 /** Versión del placeholder SVG: súbela al cambiar su diseño. */
-const THUMB_VERSION = "?v=3";
+const THUMB_VERSION = "?v=4";
 
 /** Añade (o refresca) el parámetro de versión sin duplicarlo. */
 function withVersion(url: string): string {
@@ -46,4 +46,17 @@ export function resolveHeroBackground(url: string | undefined | null): string {
   const u = (url ?? "").trim();
   if (!u || isDeadImageUrl(u)) return "";
   return u;
+}
+
+/**
+ * Imagen horizontal (1200x630) de la plantilla para compartir en redes.
+ * El catálogo usa la vertical de resolveTemplateThumb porque su tarjeta es 4:5;
+ * aquí hace falta la apaisada, que es la que esperan WhatsApp, Instagram y
+ * Facebook al previsualizar un enlace.
+ */
+export function resolveTemplateOgImage(templateId: string, thumbnailUrl?: string): string {
+  const url = (thumbnailUrl ?? "").trim();
+  if (url.startsWith("http") && !isDeadImageUrl(url)) return url;
+  if (templateId) return `/api/thumb/${encodeURIComponent(templateId)}${THUMB_VERSION}&size=og`;
+  return `/api/thumb/lock/1${THUMB_VERSION}&size=og`;
 }

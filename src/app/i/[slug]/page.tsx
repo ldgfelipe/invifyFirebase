@@ -8,6 +8,7 @@ import { getPublishedInvitationBySlug } from "@/lib/firestore";
 import { InvitationRenderer } from "@/components/invitation/InvitationRenderer";
 import { ViewCounter } from "@/components/invitation/ViewCounter";
 import { invitationUrl } from "@/lib/seo";
+import { isDeadImageUrl, resolveTemplateOgImage } from "@/lib/catalogImages";
 import { getInvitationFeatures } from "@/lib/plans";
 
 // ISR: regenera la página cada 5 min (rápida + fresca para SEO).
@@ -44,13 +45,31 @@ export async function generateMetadata({
   };
 }
 
-// Busca la primera imagen útil del builderConfig para el OG image.
+/**
+ * Busca la primera imagen útil del builderConfig para el OG image.
+ *
+ * Las plantillas antiguas guardan URLs de loremflickr, que hoy responde 401: si
+ * se emitieran tal cual, WhatsApp y Facebook mostrarían un preview roto. Se
+ * descartan y, si no queda ninguna, se cae a la miniatura generada de la
+ * plantilla (ver resolveTemplateOgImage).
+ *
+ * OJO: esa miniatura es SVG y las redes sociales no la renderizan. Para un
+ * preview real hay que subir una foto desde el editor; mientras no exista, es
+ * preferible a un enlace muerto.
+ */
 function findImage(inv: any): string | undefined {
+  const usable = (u: unknown) =>
+    typeof u === "string" && u.startsWith("http") && !isDeadImageUrl(u);
+
   for (const m of inv.builderConfig?.modules ?? []) {
-    if (m.type === "header" && m.imageUrl) return m.imageUrl;
-    if (m.type === "carousel" && m.images?.[0]?.url) return m.images[0].url;
+    if (m.type === "header" && usable(m.imageUrl)) return m.imageUrl;
+    if (m.type === "carousel" && usable(m.images?.[0]?.url)) return m.images[0].url;
   }
-  return inv.meta?.imageUrl;
+  if (usable(inv.meta?.imageUrl)) return inv.meta.imageUrl;
+
+  const templateId = inv.builderConfig?.templateId;
+  if (typeof templateId === "string" && templateId) return resolveTemplateOgImage(templateId);
+  return undefined;
 }
 
 export default async function InvitationPage({

@@ -1,6 +1,23 @@
+// ============================================================================
+// CONDITIONAL PRELOADER - Pantalla de carga de la invitación.
+//
+// Antes era una cuenta atrás de 5 s. Ahora muestra una animación de la
+// biblioteca de loaders (src/lib/loaderAnimations.ts): cada invitación pinta una
+// distinta con los colores de su tema. Si la plantilla no fija animación, se
+// elige una al azar en cada carga.
+//
+// El delay total no cambia (5 s en free), así que ni el consumo de datos ni el
+// flujo de navegación se ven afectados.
+// ============================================================================
 "use client";
 
 import { useEffect, useState } from "react";
+import { LoaderAnimation } from "./LoaderAnimation";
+import {
+  normalizeLoaderAnimation,
+  resolveLoaderAnimation,
+  type LoaderAnimationId,
+} from "@/lib/loaderAnimations";
 
 interface ConditionalPreloaderProps {
   tier: "free" | "premium";
@@ -8,6 +25,7 @@ interface ConditionalPreloaderProps {
   children: React.ReactNode;
   preloaderConfig?: {
     imageUrl?: string;
+    animation?: string;
     text?: string;
     adImageUrl?: string;
     adText?: string;
@@ -16,6 +34,9 @@ interface ConditionalPreloaderProps {
   };
 }
 
+/** Segundos que dura el bloqueo en plan free (los mismos que antes). */
+const FREE_DELAY_MS = 5000;
+
 export function ConditionalPreloader({
   tier,
   invitationId,
@@ -23,27 +44,28 @@ export function ConditionalPreloader({
   preloaderConfig,
 }: ConditionalPreloaderProps) {
   const [showContent, setShowContent] = useState(tier === "premium");
-  const [countdown, setCountdown] = useState(5);
+
+  // "random" se resuelve en un efecto y no durante el render: si se sorteara al
+  // pintar, el HTML del servidor y el del cliente no coincidirían y React
+  // marcaría error de hidratación.
+  const [animation, setAnimation] = useState<LoaderAnimationId>("envelope");
+
+  useEffect(() => {
+    if (preloaderConfig?.animation) {
+      setAnimation(resolveLoaderAnimation(preloaderConfig.animation));
+    } else {
+      setAnimation(resolveLoaderAnimation(normalizeLoaderAnimation(undefined)));
+    }
+  }, [preloaderConfig?.animation]);
 
   useEffect(() => {
     if (tier === "premium") {
       setShowContent(true);
       return;
     }
-
-    // Free tier: mostrar preloader 5 segundos
-    const timer = setInterval(() => {
-      setCountdown((c) => {
-        if (c <= 1) {
-          clearInterval(timer);
-          setShowContent(true);
-          return 0;
-        }
-        return c - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
+    // Free: mantiene la espera que ya tenían los usuarios, sin contador visible.
+    const timer = setTimeout(() => setShowContent(true), FREE_DELAY_MS);
+    return () => clearTimeout(timer);
   }, [tier]);
 
   if (showContent) {
@@ -63,38 +85,32 @@ export function ConditionalPreloader({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-white">
       <div className="max-w-md w-full mx-4 text-center p-8">
-        {/* Logo Invify */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/logo-invify.png" alt="Invify" className="mx-auto mb-4 h-10 w-auto object-contain" />
-        {/* Preloader visual existente */}
-        {preloaderConfig?.imageUrl && (
-          <img
-            src={preloaderConfig.imageUrl}
-            alt={preloaderConfig.text ?? "Cargando..."}
-            className="mx-auto mb-6 w-32 h-32 object-cover rounded-xl"
-          />
-        )}
+        <img src="/logo-invify.png" alt="Invify" className="mx-auto mb-2 h-10 w-auto object-contain" />
 
-        <p className="text-lg text-ink/70 mb-6">
+        <div className="flex justify-center">
+          <LoaderAnimation animation={animation} />
+        </div>
+
+        <p className="text-lg text-ink/70 mt-2">
           {preloaderConfig?.text ?? "Cargando tu invitación..."}
         </p>
 
-        {/* Cuenta regresiva */}
-        <div className="mb-8">
-          <div className="text-4xl font-serif text-gold-500 mb-2">
-            {countdown}s
-          </div>
-          <div className="h-1 bg-ink/10 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-gold-500 transition-all duration-1000 ease-linear"
-              style={{ width: `${(countdown / 5) * 100}%` }}
-            />
-          </div>
+        {/* Barra de progreso sin cifras: mantiene la sensación de avance que
+            daba el contador, sin mostrar segundos que el usuario espera. */}
+        <div
+          className="mx-auto mt-6 h-1 w-40 overflow-hidden rounded-full bg-ink/10"
+          role="progressbar"
+          aria-label="Cargando"
+          data-invitation={invitationId}
+        >
+          <div className="h-full rounded-full bg-gold-500 motion-safe:animate-shimmer" />
         </div>
 
         {/* Publicidad FREE tier */}
         {adConfig && (
-          <div className="border-t border-ink/10 pt-6">
+          <div className="border-t border-ink/10 pt-6 mt-6">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={adConfig.imageUrl}
               alt="Invify"

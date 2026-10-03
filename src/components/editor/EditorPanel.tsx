@@ -5,6 +5,12 @@ import { cn } from "@/lib/cn";
 import { useAuth } from "@/context/AuthContext";
 import { ImageBank } from "./ImageBank";
 import { uploadFileAsWebp } from "@/lib/imageUpload";
+import { LoaderAnimation } from "@/components/invitation/LoaderAnimation";
+import {
+  LOADER_ANIMATIONS,
+  normalizeLoaderAnimation,
+  type LoaderAnimationSetting,
+} from "@/lib/loaderAnimations";
 import type { InvitationModule, BuilderConfig, ModuleStyle } from "@/lib/types";
 
 interface EditorPanelProps {
@@ -39,7 +45,7 @@ export function EditorPanel({ module, config, onUpdate, onRemove, theme, onTheme
 
       {/* Campos específicos por tipo */}
       <div className="space-y-4">
-        {renderModuleFields(module, onUpdate)}
+        {renderModuleFields(module, onUpdate, config.theme?.primaryColor)}
       </div>
 
       {/* Estilo del módulo (nuevo: cambios drásticos) */}
@@ -141,7 +147,73 @@ export function EditorPanel({ module, config, onUpdate, onRemove, theme, onTheme
   );
 }
 
-function renderModuleFields(module: InvitationModule, onUpdate: (updates: Partial<InvitationModule>) => void) {
+/**
+ * Selector de animación del preloader con vista previa en vivo.
+ *
+ * "random" deja la elección en manos de quien visita: cada carga muestra una
+ * animación distinta. El resto fija una concreta. La previsualización pinta el
+ * componente real, con el color primario de la plantilla, para que se vea
+ * exactamente lo que verá el invitado.
+ */
+function LoaderAnimationPicker({
+  value,
+  onChange,
+  primaryColor,
+}: {
+  value: unknown;
+  onChange: (v: LoaderAnimationSetting) => void;
+  primaryColor?: string;
+}) {
+  const current = normalizeLoaderAnimation(value);
+  // "random" no se puede previsualizar en concreto: se enseña la primera como
+  // ejemplo, que es lo que verá el visitante la mayoría de las veces.
+  const preview: LoaderAnimationSetting = current === "random" ? "envelope" : current;
+
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="block text-sm font-medium text-ink mb-1">Animación de carga</label>
+        <select
+          value={current}
+          onChange={(e) => onChange(e.target.value as LoaderAnimationSetting)}
+          className="w-full rounded-lg border border-ink/20 px-3 py-2 text-sm bg-white"
+        >
+          <option value="random">Aleatoria (una distinta en cada visita)</option>
+          {LOADER_ANIMATIONS.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.label}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-ink/50 mt-1">
+          {current === "random"
+            ? "Cada visita enseña una animación distinta de la lista."
+            : "Esta invitación siempre abrirá con esta animación."}
+        </p>
+      </div>
+
+      <div>
+        <span className="block text-sm font-medium text-ink mb-1">Vista previa</span>
+        <div
+          className="flex justify-center rounded-lg border border-ink/10 py-4"
+          style={
+            primaryColor
+              ? ({ "--invify-primary": primaryColor } as React.CSSProperties)
+              : undefined
+          }
+        >
+          <LoaderAnimation animation={preview} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function renderModuleFields(
+  module: InvitationModule,
+  onUpdate: (updates: Partial<InvitationModule>) => void,
+  primaryColor?: string
+) {
   const m = module as any;
 
   switch (module.type) {
@@ -158,6 +230,11 @@ function renderModuleFields(module: InvitationModule, onUpdate: (updates: Partia
     case "preloader":
       return (
         <>
+          <LoaderAnimationPicker
+            value={m.animation}
+            onChange={(animation) => onUpdate({ animation })}
+            primaryColor={primaryColor}
+          />
           <ImageField label="Imagen" value={m.imageUrl} onChange={(v) => onUpdate({ imageUrl: v })} />
           <Field label="Texto" value={m.text} onChange={(v) => onUpdate({ text: v })} />
         </>
