@@ -1,7 +1,12 @@
 // ============================================================================
 // PAYMENTS - Configuración de claves por proveedor.
-// Prioridad: SiteSettings (Firestore /site/config) > env vars.
-// Cada proveedor usa credenciales test o live según `mode`.
+// Prioridad: /paymentConfig (Firestore, PRIVADO, solo admin) > env vars.
+//
+// NOTA DE SEGURIDAD: estas credenciales estuvieron hasta ahora en
+// /site/config, que tiene "allow read: if true" porque el landing lo lee con el
+// SDK web. Eso hacia que cualquier persona pudiera leer las claves secretas
+// desde Firestore sin iniciar sesion. Ahora /site/config solo guarda contenido
+// publico y las claves viven en /paymentConfig, cerrado a admin.
 // ============================================================================
 import { adminDb } from "@/lib/firebase/admin";
 import type { PaymentMode, PaymentProvider } from "./types";
@@ -22,22 +27,24 @@ export interface ProviderCredentials {
   mpWebhookSecret?: string;
 }
 
+/** Colección privada de credenciales. Nunca leer con el SDK web. */
+const PAYMENT_CONFIG_COLLECTION = "paymentConfig";
+const PAYMENT_CONFIG_DOC = "default";
+
 /** Lee la config de un proveedor para el modo solicitado. */
 export async function getProviderCredentials(
   provider: PaymentProvider,
   mode: PaymentMode
 ): Promise<ProviderCredentials> {
-  const settings = await loadSiteSettings();
-
-  // Camino 1: SiteSettings (Firestore)
+  // Camino 1: /paymentConfig (Firestore privado)
   const resolved: ProviderCredentials = {
     mode,
-    ...pickForMode(provider, mode, settings),
+    ...pickForMode(provider, mode, await loadPaymentConfig()),
   };
 
   // Camino 2: env vars (fallback)
-  const env = pickFromEnv(provider, mode);
   if (!hasCredentials(provider, resolved)) {
+    const env = pickFromEnv(provider, mode);
     resolved.secretKey = env.secretKey;
     resolved.publishableKey = env.publishableKey;
     resolved.webhookSecret = env.webhookSecret;
@@ -64,9 +71,13 @@ export function hasCredentials(provider: PaymentProvider, creds: ProviderCredent
   }
 }
 
-async function loadSiteSettings(): Promise<Record<string, any>> {
+/**
+ * Lee las credenciales desde Firestore con el Admin SDK, que ignora las reglas.
+ * El navegador nunca debe leer este documento.
+ */
+async function loadPaymentConfig(): Promise<Record<string, any>> {
   try {
-    const snap = await adminDb.collection("site").doc("config").get();
+    const snap = await adminDb.collection(PAYMENT_CONFIG_COLLECTION).doc(PAYMENT_CONFIG_DOC).get();
     return snap.exists ? (snap.data() as Record<string, any>) : {};
   } catch {
     return {};

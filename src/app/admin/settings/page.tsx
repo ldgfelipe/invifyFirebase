@@ -6,6 +6,32 @@ import { db } from "@/lib/firebase/client";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { DEFAULT_BANNER, type SiteSettings } from "@/lib/types";
 
+// Campos que son CREDENCIALES SECRETAS. Antes vivian en /site/config, que es de
+// lectura publica; ahora se guardan en /paymentConfig mediante una API de admin
+// que solo devuelve si estan configuradas y una mascara, nunca el valor.
+const SECRET_FIELDS = [
+  "stripeTestSecretKey",
+  "stripeTestWebhookSecret",
+  "stripeLiveSecretKey",
+  "stripeLiveWebhookSecret",
+  "paypalTestSecret",
+  "paypalLiveSecret",
+  "mercadopagoTestAccessToken",
+  "mercadopagoTestWebhookSecret",
+  "mercadopagoLiveAccessToken",
+  "mercadopagoLiveWebhookSecret",
+] as const;
+
+type SecretField = (typeof SECRET_FIELDS)[number];
+type SecretStatus = Partial<Record<SecretField, { set: boolean; masked: string }>>;
+
+/** Quita cualquier credencial antes de escribir en el documento publico. */
+function stripSecrets<T extends object>(obj: T): T {
+  const out = { ...(obj as Record<string, unknown>) };
+  for (const f of SECRET_FIELDS) delete out[f];
+  return out as T;
+}
+
 export default function AdminSiteSettings() {
   const { user } = useAuth();
   const [form, setForm] = useState<SiteSettings>({
@@ -21,6 +47,9 @@ export default function AdminSiteSettings() {
     stripeTestMode: true,
     banner: { ...DEFAULT_BANNER },
   });
+  // Valores newly-written por el admin. Vacio = no cambiar la clave guardada.
+  const [secretInput, setSecretInput] = useState<Partial<Record<SecretField, string>>>({});
+  const [secretStatus, setSecretStatus] = useState<SecretStatus>({});
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -28,6 +57,19 @@ export default function AdminSiteSettings() {
 
   const setBanner = (patch: Partial<NonNullable<SiteSettings["banner"]>>) =>
     setForm((prev) => ({ ...prev, banner: { ...DEFAULT_BANNER, ...(prev.banner ?? {}), ...patch } }));
+
+  const setSecret = (field: SecretField, value: string) =>
+    setSecretInput((prev) => ({ ...prev, [field]: value }));
+
+  /**
+   * Placeholder de un campo secreto: si ya hay clave guardada se muestra su
+   * mascara (nunca el valor). El input arranca vacio, y vacio significa
+   * "no cambiar la clave almacenada".
+   */
+  const ph = (field: SecretField, fallback: string): string => {
+    const st = secretStatus[field];
+    return st?.set ? `${st.masked} (guardada)` : fallback;
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -37,9 +79,27 @@ export default function AdminSiteSettings() {
         const data = snap.data() as SiteSettings;
         setForm(prev => ({
           ...prev,
-          ...data,
+          ...stripSecrets(data),
           banner: { ...DEFAULT_BANNER, ...(data.banner ?? {}) },
         }));
+      }
+    })();
+  }, [user]);
+
+  // Estado de las credenciales privadas (solo "existe" y mascara, nunca el valor).
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/admin/payment-config", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const json = (await res.json()) as { secrets?: SecretStatus };
+        if (json.secrets) setSecretStatus(json.secrets);
+      } catch {
+        /* si falla, los campos simplemente se muestran sin mascara */
       }
     })();
   }, [user]);
@@ -62,7 +122,29 @@ export default function AdminSiteSettings() {
       if (activeTab === "paypal") changedSections.push("paypal_keys");
       if (activeTab === "mercadopago") changedSections.push("mercadopago_keys");
 
-      await setDoc(doc(db, "site", "config"), form, { merge: true });
+      // 1. Config publica en /site/config, SIN credenciales secretas.
+      await setDoc(doc(db, "site", "config"), stripSecrets(form), { merge: true });
+
+      // 2. Credenciales secretas en /paymentConfig via API de admin.
+      // Solo se envian los campos que el admin ha escrito ahora.
+      const touched = Object.fromEntries(
+        Object.entries(secretInput).filter(([, v]) => typeof v === "string" && v.trim() !== "")
+      ) as Partial<Record<SecretField, string>>;
+      if (Object.keys(touched).length > 0) {
+        const token = await user?.getIdToken();
+        const res = await fetch("/api/admin/payment-config", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token ?? ""}` },
+          body: JSON.stringify(touched),
+        });
+        if (!res.ok) {
+          const e = (await res.json().catch(() => ({}))) as { error?: string };
+          throw new Error(e.error ?? "No se pudieron guardar las credenciales");
+        }
+        const json = (await res.json()) as { secrets?: SecretStatus };
+        if (json.secrets) setSecretStatus(json.secrets);
+        setSecretInput({});
+      }
 
       // Compat: limpia localStorage obsoleto (PricingFlow ya usa API, no localStorage)
       try {
@@ -521,6 +603,16 @@ export default function AdminSiteSettings() {
           </>
         )}
 
+        {(activeTab === "stripe" || activeTab === "paypal" || activeTab === "mercadopago") && (
+          <section className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+            <h3 className="font-medium text-amber-900 mb-1">🔒 Credenciales protegidas</h3>
+            <p className="text-sm text-amber-800">
+              Las claves secretas se guardan en una colección privada y <strong>nunca se envían a este navegador</strong>:
+              aquí solo se ve una máscara. Deja el campo vacío para mantener la clave actual; escribe un valor solo si la cambias.
+            </p>
+          </section>
+        )}
+
         {activeTab === "stripe" && (
           <>
             <section className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
@@ -542,9 +634,9 @@ export default function AdminSiteSettings() {
                   <input
                     type="password"
                     className="input font-mono text-sm"
-                    value={form.stripeTestSecretKey ?? ""}
-                    onChange={(e) => setForm({ ...form, stripeTestSecretKey: e.target.value })}
-                    placeholder="sk_test_..."
+                    value={secretInput.stripeTestSecretKey ?? ""}
+                    onChange={(e) => setSecret("stripeTestSecretKey", e.target.value)}
+                    placeholder={ph("stripeTestSecretKey", "sk_test_...")}
                     autoComplete="off"
                   />
                 </div>
@@ -553,9 +645,9 @@ export default function AdminSiteSettings() {
                   <input
                     type="password"
                     className="input font-mono text-sm"
-                    value={form.stripeTestWebhookSecret ?? ""}
-                    onChange={(e) => setForm({ ...form, stripeTestWebhookSecret: e.target.value })}
-                    placeholder="whsec_test_..."
+                    value={secretInput.stripeTestWebhookSecret ?? ""}
+                    onChange={(e) => setSecret("stripeTestWebhookSecret", e.target.value)}
+                    placeholder={ph("stripeTestWebhookSecret", "whsec_test_...")}
                     autoComplete="off"
                   />
                 </div>
@@ -581,9 +673,9 @@ export default function AdminSiteSettings() {
                   <input
                     type="password"
                     className="input font-mono text-sm"
-                    value={form.stripeLiveSecretKey ?? ""}
-                    onChange={(e) => setForm({ ...form, stripeLiveSecretKey: e.target.value })}
-                    placeholder="sk_live_..."
+                    value={secretInput.stripeLiveSecretKey ?? ""}
+                    onChange={(e) => setSecret("stripeLiveSecretKey", e.target.value)}
+                    placeholder={ph("stripeLiveSecretKey", "sk_live_...")}
                     autoComplete="off"
                   />
                 </div>
@@ -592,9 +684,9 @@ export default function AdminSiteSettings() {
                   <input
                     type="password"
                     className="input font-mono text-sm"
-                    value={form.stripeLiveWebhookSecret ?? ""}
-                    onChange={(e) => setForm({ ...form, stripeLiveWebhookSecret: e.target.value })}
-                    placeholder="whsec_live_..."
+                    value={secretInput.stripeLiveWebhookSecret ?? ""}
+                    onChange={(e) => setSecret("stripeLiveWebhookSecret", e.target.value)}
+                    placeholder={ph("stripeLiveWebhookSecret", "whsec_live_...")}
                     autoComplete="off"
                   />
                 </div>
@@ -624,9 +716,9 @@ export default function AdminSiteSettings() {
                   <input
                     type="password"
                     className="input font-mono text-sm"
-                    value={form.paypalTestSecret ?? ""}
-                    onChange={(e) => setForm({ ...form, paypalTestSecret: e.target.value })}
-                    placeholder="secret_sandbox..."
+                    value={secretInput.paypalTestSecret ?? ""}
+                    onChange={(e) => setSecret("paypalTestSecret", e.target.value)}
+                    placeholder={ph("paypalTestSecret", "secret_sandbox...")}
                     autoComplete="off"
                   />
                 </div>
@@ -662,9 +754,9 @@ export default function AdminSiteSettings() {
                   <input
                     type="password"
                     className="input font-mono text-sm"
-                    value={form.paypalLiveSecret ?? ""}
-                    onChange={(e) => setForm({ ...form, paypalLiveSecret: e.target.value })}
-                    placeholder="secret_live..."
+                    value={secretInput.paypalLiveSecret ?? ""}
+                    onChange={(e) => setSecret("paypalLiveSecret", e.target.value)}
+                    placeholder={ph("paypalLiveSecret", "secret_live...")}
                     autoComplete="off"
                   />
                 </div>
@@ -694,9 +786,9 @@ export default function AdminSiteSettings() {
                   <input
                     type="password"
                     className="input font-mono text-sm"
-                    value={form.mercadopagoTestAccessToken ?? ""}
-                    onChange={(e) => setForm({ ...form, mercadopagoTestAccessToken: e.target.value })}
-                    placeholder="TEST-..."
+                    value={secretInput.mercadopagoTestAccessToken ?? ""}
+                    onChange={(e) => setSecret("mercadopagoTestAccessToken", e.target.value)}
+                    placeholder={ph("mercadopagoTestAccessToken", "TEST-...")}
                     autoComplete="off"
                   />
                 </div>
@@ -715,9 +807,9 @@ export default function AdminSiteSettings() {
                   <input
                     type="password"
                     className="input font-mono text-sm"
-                    value={form.mercadopagoTestWebhookSecret ?? ""}
-                    onChange={(e) => setForm({ ...form, mercadopagoTestWebhookSecret: e.target.value })}
-                    placeholder="whsec_test_..."
+                    value={secretInput.mercadopagoTestWebhookSecret ?? ""}
+                    onChange={(e) => setSecret("mercadopagoTestWebhookSecret", e.target.value)}
+                    placeholder={ph("mercadopagoTestWebhookSecret", "whsec_test_...")}
                     autoComplete="off"
                   />
                 </div>
@@ -733,9 +825,9 @@ export default function AdminSiteSettings() {
                   <input
                     type="password"
                     className="input font-mono text-sm"
-                    value={form.mercadopagoLiveAccessToken ?? ""}
-                    onChange={(e) => setForm({ ...form, mercadopagoLiveAccessToken: e.target.value })}
-                    placeholder="APP_USR-..."
+                    value={secretInput.mercadopagoLiveAccessToken ?? ""}
+                    onChange={(e) => setSecret("mercadopagoLiveAccessToken", e.target.value)}
+                    placeholder={ph("mercadopagoLiveAccessToken", "APP_USR-...")}
                     autoComplete="off"
                   />
                 </div>
@@ -754,9 +846,9 @@ export default function AdminSiteSettings() {
                   <input
                     type="password"
                     className="input font-mono text-sm"
-                    value={form.mercadopagoLiveWebhookSecret ?? ""}
-                    onChange={(e) => setForm({ ...form, mercadopagoLiveWebhookSecret: e.target.value })}
-                    placeholder="whsec_live_..."
+                    value={secretInput.mercadopagoLiveWebhookSecret ?? ""}
+                    onChange={(e) => setSecret("mercadopagoLiveWebhookSecret", e.target.value)}
+                    placeholder={ph("mercadopagoLiveWebhookSecret", "whsec_live_...")}
                     autoComplete="off"
                   />
                 </div>

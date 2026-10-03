@@ -361,6 +361,31 @@ export interface BuilderConfig {
   };
 }
 
+// ----------------------------- Credenciales de pago (PRIVADO) -----------------
+// Documento /paymentConfig/default. Solo accesible con Admin SDK en servidor o
+// por un usuario con rol admin. NUNCA se devuelve al navegador en claro: la API
+// de admin solo informa si cada clave existe y una mascara.
+export interface PaymentSecrets {
+  // Stripe
+  stripeTestSecretKey?: string;
+  stripeTestWebhookSecret?: string;
+  stripeLiveSecretKey?: string;
+  stripeLiveWebhookSecret?: string;
+
+  // PayPal
+  paypalTestSecret?: string;
+  paypalLiveSecret?: string;
+
+  // Mercado Pago
+  mercadopagoTestAccessToken?: string;
+  mercadopagoTestWebhookSecret?: string;
+  mercadopagoLiveAccessToken?: string;
+  mercadopagoLiveWebhookSecret?: string;
+}
+
+/** Estado de cada credencial para el panel admin: nunca el valor en claro. */
+export type PaymentSecretStatus = Record<keyof PaymentSecrets, boolean>;
+
 // ----------------------------- Utilidades SEO -------------------------------
 export interface SeoMeta {
   title: string;
@@ -371,7 +396,9 @@ export interface SeoMeta {
 
 // ----------------------------- Config del sitio (admin) ----------------------
 // Documento /site/config editable desde el panel admin; alimenta el hero y el
-// SEO de la landing principal, y claves de pagos.
+// SEO de la landing principal. IMPORTANTE: este documento es de LECTURA
+// PUBLICA, asi que solo puede contener datos publicables (claves publishable,
+// client IDs, flags). Las claves secretas viven en /paymentConfig.
 export interface SiteSettings {
   heroTitle: string;
   heroTitle_en?: string;
@@ -389,33 +416,23 @@ export interface SiteSettings {
 
   // Stripe - Test
   stripeTestPublishableKey?: string;
-  stripeTestSecretKey?: string;
-  stripeTestWebhookSecret?: string;
 
   // Stripe - Live
   stripeLivePublishableKey?: string;
-  stripeLiveSecretKey?: string;
-  stripeLiveWebhookSecret?: string;
 
   // PayPal - Test
   paypalTestClientId?: string;
-  paypalTestSecret?: string;
   paypalTestWebhookId?: string;
 
   // PayPal - Live
   paypalLiveClientId?: string;
-  paypalLiveSecret?: string;
   paypalLiveWebhookId?: string;
 
   // Mercado Pago - Test
-  mercadopagoTestAccessToken?: string;
   mercadopagoTestPublicKey?: string;
-  mercadopagoTestWebhookSecret?: string;
 
   // Mercado Pago - Live
-  mercadopagoLiveAccessToken?: string;
   mercadopagoLivePublicKey?: string;
-  mercadopagoLiveWebhookSecret?: string;
 
   // Modo activo global (para UI)
   stripeTestMode?: boolean; // true = test, false = live

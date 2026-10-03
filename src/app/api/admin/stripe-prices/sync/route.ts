@@ -28,12 +28,13 @@ async function verifyAdmin(req: NextRequest): Promise<string | null> {
 }
 
 async function getStripeFor(mode: "test" | "live"): Promise<Stripe | null> {
-  const siteSnap = await adminDb.collection("site").doc("config").get();
-  const settings = siteSnap.exists ? (siteSnap.data() as any) : {};
-  const key =
-    mode === "test" ? settings.stripeTestSecretKey : settings.stripeLiveSecretKey;
+  // Las claves secretas viven en /paymentConfig (privado, solo admin),
+  // nunca en /site/config que es de lectura publica.
+  const snap = await adminDb.collection("paymentConfig").doc("default").get();
+  const cfg = snap.exists ? (snap.data() as Record<string, any>) : {};
+  const key = mode === "test" ? cfg.stripeTestSecretKey : cfg.stripeLiveSecretKey;
   if (!key) {
-    // Fallback a env cuando no hay clave en SiteSettings.
+    // Fallback a env cuando no hay clave guardada.
     const secret = process.env.STRIPE_SECRET_KEY;
     if (!secret) return null;
     const isLive = secret.startsWith("sk_live");

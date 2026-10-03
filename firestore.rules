@@ -122,9 +122,20 @@ service cloud.firestore {
     }
 
     // ---- /site : config del sitio (hero/SEO) editable solo por admin ----
+    // OJO: este documento es de LECTURA PUBLICA porque el landing y las paginas
+    // publicas lo leen con el SDK web. Por eso NUNCA debe guardar credenciales.
+    // Las claves de pago viven en /paymentConfig, que es privado.
     match /site/{docId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // ---- /paymentConfig : credenciales de Stripe, PayPal y Mercado Pago ----
+    // Solo admin. Contiene claves secretas y webhook secrets, asi que jamas debe
+    // ser legible desde el cliente: el SDK web del navegador no debe poder leer
+    // este documento ni aunque conozca la apiKey publica del proyecto.
+    match /paymentConfig/{docId} {
+      allow read, write: if isAdmin();
     }
 
     // ---- /aiConfig : config del asistente IA (contiene la API key) ----
