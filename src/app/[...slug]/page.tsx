@@ -89,8 +89,17 @@ export default async function PublicPage({ params }: { params: { slug: string[] 
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      {/* demo=true: sin gating de plan ni escritura de RSVP/quiz. */}
-      <InvitationRenderer config={page.builderConfig} invitationId={`page_${page.id}`} demo />
+      {/* demo=true: sin gating de plan ni escritura de RSVP/quiz.
+          tier="premium": salta el ConditionalPreloader. Con el valor por
+          defecto ("free") el contenido se oculta tras una pantalla de carga de
+          5 s con publicidad, y ademas no se renderiza en el servidor: Google
+          recibiria HTML vacio. Una pagina de marketing debe servirse completa. */}
+      <InvitationRenderer
+        config={page.builderConfig}
+        invitationId={`page_${page.id}`}
+        demo
+        tier="premium"
+      />
     </>
   );
 }
