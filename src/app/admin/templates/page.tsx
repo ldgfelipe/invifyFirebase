@@ -18,6 +18,8 @@ import {
   deleteDoc,
 } from "firebase/firestore";
 import type { Template, TemplateCategory } from "@/lib/types";
+import { ImageField } from "@/components/admin/ImageField";
+import { resolveTemplateThumb } from "@/lib/catalogImages";
 
 const CATEGORIES: TemplateCategory[] = [
   "boda",
@@ -215,8 +217,10 @@ export default function AdminTemplates() {
         <div className="space-y-3 max-h-[70vh] overflow-auto pr-1">
           {filtered.map((t) => (
             <div key={t.id} className={`card p-3 flex gap-3 hover:shadow-md transition ${editing?.id === t.id ? "ring-2 ring-gold-300" : ""}`}>
+              {/* Misma resolucion que el catalogo: si la plantilla no tiene foto real,
+                  el admin ve la miniatura generada, igual que un visitante. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={t.thumbnailUrl} alt={t.name} className="w-20 h-20 rounded-lg object-cover border border-ink/10 shrink-0" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+              <img src={resolveTemplateThumb(t.id, t.thumbnailUrl)} alt={t.name} className="w-20 h-20 rounded-lg object-cover border border-ink/10 shrink-0" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
                   <p className="font-serif text-sm text-ink leading-tight truncate pr-2">{t.name}</p>
@@ -277,25 +281,23 @@ export default function AdminTemplates() {
               </option>
             ))}
           </select>
-          <input
-            className="input"
-            placeholder="thumbnailUrl (https://...)"
+          <ImageField
+            label="Foto de la plantilla (miniatura del catálogo)"
             value={form.thumbnailUrl ?? ""}
-            onChange={(e) => setForm({ ...form, thumbnailUrl: e.target.value })}
+            onChange={(url) => setForm({ ...form, thumbnailUrl: url })}
+            target="templates"
+            id={editing?.id || form.name || "nueva"}
+            hint="Se usa en el catálogo y al compartir en redes. Si la dejas vacía se genera una miniatura con el diseño real de la plantilla."
           />
-          <input
-            className="input"
-            placeholder="previewUrl (https://...)"
+          <ImageField
+            label="Foto de portada ampliada (opcional)"
             value={form.previewUrl ?? ""}
-            onChange={(e) => setForm({ ...form, previewUrl: e.target.value })}
+            onChange={(url) => setForm({ ...form, previewUrl: url })}
+            target="templates"
+            id={`${editing?.id || form.name || "nueva"}-preview`}
+            aspect="aspect-[16/9]"
+            hint="Imagen grande para la vista previa. Si la dejas vacía se usa la miniatura."
           />
-          <p className="text-[11px] text-ink/45 bg-ink/5 rounded-lg px-3 py-2 -mt-1">
-            💡 Aloja gratis en{" "}
-            <a href="https://imgbb.com" target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:underline">imgbb.com</a>,{" "}
-            <a href="https://postimages.org" target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:underline">postimages.org</a>,{" "}
-            <a href="https://catbox.moe" target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:underline">catbox.moe</a> o{" "}
-            <a href="https://imgur.com/upload" target="_blank" rel="noopener noreferrer" className="text-gold-500 hover:underline">imgur.com</a> y pega la URL directa.
-          </p>
           <label className="flex items-center gap-2 text-sm text-ink/70">
             <input
               type="checkbox"

@@ -10,7 +10,7 @@
 const DEAD_IMAGE_HOSTS = ["loremflickr.com", "picsum.photos"];
 
 /** Versión del placeholder SVG: súbela al cambiar su diseño. */
-const THUMB_VERSION = "?v=2";
+const THUMB_VERSION = "?v=3";
 
 /** Añade (o refresca) el parámetro de versión sin duplicarlo. */
 function withVersion(url: string): string {

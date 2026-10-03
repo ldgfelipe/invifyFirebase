@@ -15,6 +15,9 @@ import type { Page, BuilderConfig, InvitationModule } from "@/lib/types";
 import { EditorSidebar } from "@/components/editor/EditorSidebar";
 import { EditorCanvas } from "@/components/editor/EditorCanvas";
 import { EditorPanel } from "@/components/editor/EditorPanel";
+import { ImageField } from "@/components/admin/ImageField";
+import { normalizePageSlug as normalizeSlug } from "@/lib/pageSlug";
+import { SITE_URL } from "@/lib/seo";
 import { cn } from "@/lib/cn";
 
 export default function AdminPageEdit() {
@@ -29,6 +32,7 @@ export default function AdminPageEdit() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showSettings, setShowSettings] = useState(false);
 
   useEffect(() => {
     if (!user || !id) return;
@@ -97,14 +101,25 @@ export default function AdminPageEdit() {
     setSaving(true);
     setError(null);
     try {
+      // El slug determina la URL publica. Se normaliza al guardar para que
+      // "Nosotros " y "/nosotros/" no acaben en rutas distintas.
+      const nextSlug = normalizeSlug(page.slug);
+      if (nextSlug === "/") {
+        setError("El slug no puede quedar vacío.");
+        setSaving(false);
+        return;
+      }
       await updateDoc(doc(db, "pages", id), {
         builderConfig: config,
         title: page.title,
+        slug: nextSlug,
+        seoTitle: page.seoTitle,
         metaDescription: page.metaDescription,
         metaImage: page.metaImage,
         status: page.status,
         updatedAt: Date.now(),
       });
+      if (nextSlug !== page.slug) setPage({ ...page, slug: nextSlug });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err: any) {
@@ -152,6 +167,76 @@ export default function AdminPageEdit() {
             </span>
           </div>
           <p className="text-xs text-ink/50 font-mono">{page.slug}</p>
+        </div>
+
+        {/* Ajustes de publicación: slug, SEO e imagen. */}
+        <div className="border-b border-ink/10">
+          <button
+            onClick={() => setShowSettings((v) => !v)}
+            className="w-full text-left px-4 py-3 text-sm text-ink/70 hover:bg-ink/5 flex items-center justify-between"
+          >
+            <span className="font-medium">Ajustes de publicación</span>
+            <span className="text-ink/40">{showSettings ? "−" : "+"}</span>
+          </button>
+
+          {showSettings && (
+            <div className="px-4 pb-4 space-y-3">
+              <div>
+                <label className="text-sm text-ink/70 block mb-1">Título interno</label>
+                <input
+                  className="input text-sm"
+                  value={page.title}
+                  onChange={(e) => setPage({ ...page, title: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm text-ink/70 block mb-1">Slug (URL pública)</label>
+                <input
+                  className="input text-sm font-mono"
+                  value={page.slug}
+                  placeholder="/nosotros"
+                  onChange={(e) => setPage({ ...page, slug: e.target.value })}
+                />
+                <p className="text-xs text-ink/50 mt-1 break-all">
+                  Se publicará en: {SITE_URL}{normalizeSlug(page.slug) || "/"}
+                </p>
+                <p className="text-xs text-amber-700 mt-1">
+                  Cambiar el slug rompe los enlaces ya compartidos.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-sm text-ink/70 block mb-1">Título SEO (opcional)</label>
+                <input
+                  className="input text-sm"
+                  value={page.seoTitle ?? ""}
+                  placeholder={page.title}
+                  onChange={(e) => setPage({ ...page, seoTitle: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm text-ink/70 block mb-1">Meta descripción</label>
+                <textarea
+                  className="input text-sm"
+                  rows={3}
+                  value={page.metaDescription ?? ""}
+                  onChange={(e) => setPage({ ...page, metaDescription: e.target.value })}
+                />
+              </div>
+
+              <ImageField
+                label="Imagen al compartir (Open Graph)"
+                value={page.metaImage ?? ""}
+                onChange={(url) => setPage({ ...page, metaImage: url })}
+                target="pages"
+                id={id ?? page.id}
+                aspect="aspect-[1.91/1]"
+                hint="Es la imagen que se ve al compartir en WhatsApp, redes y Google. Si la dejas vacía se usa la primera imagen de la página."
+              />
+            </div>
+          )}
         </div>
         <EditorSidebar
           modules={config.modules}

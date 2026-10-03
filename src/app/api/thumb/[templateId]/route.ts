@@ -1,9 +1,13 @@
 // ============================================================================
 // API /api/thumb/[templateId]
-// Genera un thumbnail SVG determinista (800x600) con los colores reales del
-// builderConfig.theme de cada plantilla + un motivo por categoría. No depende
-// de servicios externos (loremflickr cae con 401 ante hotlink), así el catálogo
-// local siempre muestra imagen. Aditivo: no rompe catálogo ni pricing existente.
+// Miniatura SVG por plantilla (1200x630) construida con el diseño REAL de su
+// builderConfig: fondo, color primario, tipografía y el texto real del módulo
+// header (título, subtítulo, nombres y fecha).
+//
+// Por qué no se usa una foto: las plantillas se sembraron con URLs de
+// loremflickr, que hoy responde 401 ante hotlink, así que no hay ninguna foto
+// real guardada que mostrar. Cuando el admin suba una foto por plantilla, esta
+// ruta deja de usarse (ver resolveTemplateThumb).
 //
 // NOTA: dentro de un atributo SVG el color va en hexadecimal CRUDO. Codificarlo
 // como %23 (URL) lo vuelve inválido y el navegador dibuja la figura invisible.
@@ -14,35 +18,8 @@ import { adminDb } from "@/lib/firebase/admin";
 
 export const runtime = "nodejs";
 
-const CATEGORY_MOTIFS: Record<string, { label: string; shape: string }> = {
-  boda: {
-    label: "Boda",
-    shape:
-      '<circle cx="400" cy="280" r="104" fill="none" stroke="%ACCENT%" stroke-width="3" opacity=".9"/><circle cx="400" cy="280" r="78" fill="none" stroke="%ACCENT%" stroke-width="1.5" opacity=".65"/><path d="M400 222l13 22 10-10 10 10 13-22-23 24z" fill="%ACCENT%" opacity=".55"/>',
-  },
-  cumpleanos: {
-    label: "Cumpleaños",
-    shape:
-      '<path d="M330 330q10-56 70-56t70 56z" fill="%ACCENT%" opacity=".38"/><path d="M352 296l-8-17 17-8-17-8 8-17 17 8v-18l8 17 17-8-8 17 17 8-17 8 8 17-17-8v17l-8-17-17 8z" fill="%ACCENT%"/>',
-  },
-  babyshower: {
-    label: "Baby Shower",
-    shape:
-      '<path d="M336 282a64 72 0 0 1 128 0z" fill="none" stroke="%ACCENT%" stroke-width="3"/><path d="M400 284v78" stroke="%ACCENT%" stroke-width="2" opacity=".8"/><circle cx="400" cy="312" r="13" fill="none" stroke="%ACCENT%" stroke-width="2"/>',
-  },
-  bautizo: {
-    label: "Bautizo",
-    shape:
-      '<path d="M400 214v124m0-74l36 40-36-40-36 40" fill="none" stroke="%ACCENT%" stroke-width="3"/><path d="M406 392h-16" stroke="%ACCENT%" stroke-width="3"/>',
-  },
-  corporativo: {
-    label: "Corporativo",
-    shape:
-      '<rect x="316" y="222" width="168" height="116" rx="6" fill="none" stroke="%ACCENT%" stroke-width="3"/><path d="M316 258h168" stroke="%ACCENT%" stroke-width="1.5" opacity=".7"/><path d="M338 300h60" stroke="%ACCENT%" stroke-width="4"/><circle cx="452" cy="300" r="12" fill="%ACCENT%" opacity=".45"/>',
-  },
-};
-
-const FALLBACK_ACCENTS = ["#C9A227", "#2F5D8A", "#4C9A8A", "#E4572E", "#8B5E3C"];
+const W = 1200;
+const H = 630;
 
 function normalizeThemeColor(c: string | undefined): string | null {
   if (!c) return null;
@@ -50,12 +27,6 @@ function normalizeThemeColor(c: string | undefined): string | null {
   return c.length === 4
     ? "#" + Array.from(c.slice(1)).map((x) => x + x).join("")
     : c;
-}
-
-function defaultAccentFor(templateId: string): string {
-  let h = 0;
-  for (const ch of templateId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  return FALLBACK_ACCENTS[h % FALLBACK_ACCENTS.length];
 }
 
 function escapeXml(s: string): string {
@@ -67,7 +38,6 @@ function escapeXml(s: string): string {
     .replace(/'/g, "&apos;");
 }
 
-/** Luminancia relativa 0..1 para decidir texto claro u oscuro. */
 function luminance(hex: string): number {
   const h = hex.replace("#", "");
   const r = parseInt(h.slice(0, 2), 16) / 255;
@@ -76,7 +46,6 @@ function luminance(hex: string): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
-/** Mezcla dos colores hex. t=0 -> a, t=1 -> b. */
 function mix(a: string, b: string, t: number): string {
   const pa = a.replace("#", "");
   const pb = b.replace("#", "");
@@ -90,12 +59,60 @@ function mix(a: string, b: string, t: number): string {
   return `#${ch(0)}${ch(1)}${ch(2)}`;
 }
 
-/** Reduce el cuerpo para que un nombre largo no se salga de la tarjeta. */
-function fitFontSize(name: string, base: number, maxWidth: number): number {
-  let size = base;
-  // Aproximación: Georgia/serif ronda 0.52 em por carácter.
-  while (size > 14 && name.length * size * 0.52 > maxWidth) size -= 2;
-  return size;
+const MONTHS = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+/** "2026-08-12T17:00:00" -> "12 de agosto de 2026" */
+function formatEsDate(raw: unknown): string {
+  if (typeof raw !== "string" || !raw.trim()) return "";
+  const d = new Date(raw);
+  if (Number.isNaN(d.getTime())) return "";
+  return `${d.getUTCDate()} de ${MONTHS[d.getUTCMonth()]} de ${d.getUTCFullYear()}`;
+}
+
+/**
+ * Parte un texto en como mucho `maxLines` lineas que quepan en `maxWidth`.
+ * Estimacion conservadora: Georgia ~0.56em por caracter, sans ~0.54em.
+ */
+function wrapText(
+  text: string,
+  fontSize: number,
+  maxWidth: number,
+  maxLines: number,
+  perChar: number
+): string[] {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+  const fits = (line: string) => line.length * fontSize * perChar <= maxWidth;
+
+  const lines: string[] = [];
+  let current = "";
+  for (const w of words) {
+    const attempt = current ? `${current} ${w}` : w;
+    if (fits(attempt) || !current) {
+      current = attempt;
+    } else {
+      lines.push(current);
+      current = w;
+      if (lines.length === maxLines) break;
+    }
+  }
+  if (lines.length < maxLines && current) lines.push(current);
+
+  if (lines.length === maxLines) {
+    // Si hubo que recortar, marca el final con puntos suspensivos.
+    const last = lines[maxLines - 1];
+    const joined = words.join(" ");
+    const kept = lines.join(" ");
+    if (kept.length < joined.length) {
+      let cut = last;
+      while (cut.length > 1 && !fits(`${cut}...`)) cut = cut.slice(0, -1);
+      lines[maxLines - 1] = `${cut}...`;
+    }
+  }
+  return lines;
 }
 
 export async function GET(
@@ -104,13 +121,16 @@ export async function GET(
 ): Promise<NextResponse> {
   const { templateId } = params;
 
-  let primary: string | null = null;
-  let background: string | null = null;
-  let name = "Invitación";
-  let category: string | null = null;
+  let bg = "#FFFBF2";
+  let primary = "#C9A227";
+  let serif = false;
+  let title = "Invitación digital";
+  let subtitle = "";
+  let names = "";
+  let dateText = "";
+  let category = "";
 
   try {
-    // Una sola lectura: el mismo doc alimentaba antes dos consultas.
     let snap = await adminDb.collection("templates").doc(templateId).get();
     if (!snap.exists) {
       const demo = await adminDb.collection("demoTemplates").doc(templateId).get();
@@ -119,62 +139,91 @@ export async function GET(
     if (snap.exists) {
       const data = snap.data() as any;
       const theme = data?.builderConfig?.theme ?? {};
-      primary = normalizeThemeColor(theme?.primaryColor);
-      background = normalizeThemeColor(theme?.background ?? theme?.backgroundColor);
-      name = (data?.name as string) ?? "Invitación";
-      category = typeof data?.category === "string" ? data.category : null;
+      bg = normalizeThemeColor(theme?.background ?? theme?.backgroundColor) ?? bg;
+      primary = normalizeThemeColor(theme?.primaryColor) ?? primary;
+      serif = theme?.fontFamily !== "sans";
+      if (typeof data?.name === "string" && data.name.trim()) title = data.name.trim();
+      if (typeof data?.category === "string") category = data.category;
+
+      const header = (data?.builderConfig?.modules ?? []).find((m: any) => m?.type === "header");
+      if (header) {
+        if (typeof header.title === "string" && header.title.trim()) title = header.title.trim();
+        if (typeof header.subtitle === "string") subtitle = header.subtitle.trim();
+        if (typeof header.names === "string") names = header.names.trim();
+        dateText = formatEsDate(header.date);
+      }
     }
   } catch {
-    // si falla la lectura, usa la paleta por defecto: nunca rompe el catálogo.
+    // Si falla la lectura se usa la paleta por defecto: nunca rompe el catalogo.
   }
 
-  // Normaliza la categoría para acertar con la clave del diccionario.
-  const catKey = (category ?? name)
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z]/g, "");
+  const isDark = luminance(bg) < 0.45;
+  const ink = isDark ? mix(bg, "#ffffff", 0.95) : "#1F2937";
+  const soft = isDark ? mix(bg, "#ffffff", 0.72) : mix(primary, "#1F2937", 0.35);
+  const font = serif
+    ? "Georgia, 'Times New Roman', serif"
+    : "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 
-  const motif =
-    CATEGORY_MOTIFS[catKey] ??
-    CATEGORY_MOTIFS[Object.keys(CATEGORY_MOTIFS).find((k) => catKey.includes(k)) ?? ""] ??
-    null;
+  // ---- layout: tarjeta de invitación centrada sobre el fondo del tema ----
+  const cardX = 96;
+  const cardY = 70;
+  const cardW = 560;
+  const cardH = 490;
+  const cardFill = isDark ? mix(bg, "#ffffff", 0.08) : "#ffffff";
+  const cardStroke = isDark ? mix(bg, "#ffffff", 0.3) : mix(primary, "#ffffff", 0.55);
 
-  const accent = defaultAccentFor(templateId);
-  // El acento es un color propio, siempre válido: se interpola en crudo.
-  const shape = (motif?.shape ?? "").replaceAll("%ACCENT%", accent);
+  // ---- textos ----
+  const cx = cardX + cardW / 2;
+  const maxW = cardW - 88;
 
-  // Tema: si el fondo es oscuro, la tarjeta y el texto se invierten para
-  // mantener el contraste; si es claro, tarjeta blanca y texto del tema.
-  const isDark = background ? luminance(background) < 0.45 : false;
-  const bg = background ?? "#FFFBF2";
-  const card = isDark ? mix(bg, "#ffffff", 0.1) : "#ffffff";
-  const ink = isDark ? mix(bg, "#ffffff", 0.92) : primary ?? "#1F2937";
-  const cardBorder = isDark ? mix(bg, "#ffffff", 0.28) : accent;
+  const nameSize = title.length > 26 ? 34 : title.length > 16 ? 42 : 52;
+  const titleLines = wrapText(title, nameSize, maxW, 2, serif ? 0.56 : 0.54);
+  const titleY0 = 232;
 
-  const nameSize = fitFontSize(name, 30, 264);
+  const subLines = subtitle ? wrapText(subtitle, 20, maxW, 2, 0.5) : [];
+  const subY0 = titleY0 + titleLines.length * (nameSize + 6) + 18;
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600" role="img">
-  <rect width="800" height="600" fill="${bg}"/>
-  <g opacity=".9">
-    <circle cx="60" cy="70" r="120" fill="${accent}" opacity=".07"/>
-    <circle cx="752" cy="540" r="150" fill="${accent}" opacity=".06"/>
-    <circle cx="740" cy="60" r="70" fill="${accent}" opacity=".05"/>
+  const footParts = [names, dateText].filter(Boolean);
+  const footLines = footParts.length
+    ? wrapText(footParts.join("  ·  "), 19, maxW, 2, 0.52)
+    : [];
+
+  const text = (x: number, y: number, size: number, fill: string, s: string, weight = "", spacing = 0) =>
+    `<text x="${x}" y="${y}" text-anchor="middle" font-family="${font}" font-size="${size}" fill="${fill}"${weight ? ` font-weight="${weight}"` : ""}${spacing ? ` letter-spacing="${spacing}"` : ""}>${escapeXml(s)}</text>`;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${escapeXml(title)}">
+  <rect width="${W}" height="${H}" fill="${bg}"/>
+  <g opacity=".55">
+    <circle cx="1060" cy="90" r="230" fill="${primary}" opacity=".10"/>
+    <circle cx="1120" cy="600" r="180" fill="${primary}" opacity=".08"/>
+    <circle cx="90" cy="590" r="140" fill="${primary}" opacity=".07"/>
   </g>
-  <rect x="248" y="68" width="312" height="432" rx="10" fill="${accent}" opacity=".16"/>
-  <rect x="240" y="60" width="312" height="432" rx="10" fill="${card}" stroke="${cardBorder}" stroke-width="1.5"/>
-  <g transform="translate(0,-14)">${shape}</g>
-  <rect x="300" y="352" width="192" height="1" fill="${cardBorder}" opacity=".35"/>
-  <text x="396" y="398" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif" font-size="${nameSize}" fill="${ink}">${escapeXml(name)}</text>
-  <text x="396" y="432" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="12" letter-spacing="4" fill="${accent}">INVITACIÓN DIGITAL</text>
-  <text x="396" y="466" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="11" letter-spacing="2" fill="${ink}" opacity=".4">invify</text>
+
+  <rect x="${cardX}" y="${cardY}" width="${cardW}" height="${cardH}" rx="18" fill="${cardFill}" stroke="${cardStroke}" stroke-width="2"/>
+  <rect x="${cardX + 18}" y="${cardY + 18}" width="${cardW - 36}" height="${cardH - 36}" rx="12" fill="none" stroke="${cardStroke}" stroke-width="1" opacity=".7"/>
+
+  <g>
+    <path d="M${cx - 17} 150c0-11 8-19 17-19s17 8 17 19c0 13-17 27-17 27s-17-14-17-27z" fill="${primary}" opacity=".9"/>
+    <circle cx="${cx}" cy="150" r="46" fill="none" stroke="${primary}" stroke-width="1.5" opacity=".45"/>
+  </g>
+
+  <rect x="${cx - 46}" y="${titleY0 - 62}" width="92" height="2" fill="${primary}" opacity=".55"/>
+
+  ${titleLines.map((l, i) => text(cx, titleY0 + i * (nameSize + 6), nameSize, ink, l, "600")).join("\n  ")}
+  ${subLines.map((l, i) => text(cx, subY0 + i * 26, 20, soft, l)).join("\n  ")}
+
+  <rect x="${cx - 52}" y="${cardY + cardH - 104}" width="104" height="1" fill="${primary}" opacity=".5"/>
+  ${footLines.map((l, i) => text(cx, cardY + cardH - 74 + i * 26, 19, soft, l)).join("\n  ")}
+
+  ${text(W - 48, H - 46, 22, primary, "invify", "700", 3)}
+  ${category ? text(48, H - 46, 15, soft, category.toUpperCase(), "", 3) : ""}
 </svg>`;
 
   return new NextResponse(svg, {
     headers: {
       "Content-Type": "image/svg+xml; charset=utf-8",
-      // TTL corto a propósito: el SVG depende del código, y un s-maxage de una
-      // semana dejaba congelada en el CDN una versión defectuosa.
+      // TTL corto a proposito: el SVG depende del codigo y de los datos de la
+      // plantilla, y un s-maxage largo dejaba congelada una version defectuosa.
       "Cache-Control": "public, max-age=3600, s-maxage=3600, stale-while-revalidate=600",
       "X-Content-Type-Options": "nosniff",
     },
