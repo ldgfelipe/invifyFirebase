@@ -111,12 +111,21 @@ export function InvitationRenderer({
   // Encuentra configuración del preloader para pasársela al ConditionalPreloader
   const preloaderModule = config.modules.find((m) => m.type === "preloader");
 
+  // El monograma del preloader necesita los nombres del evento, no el texto del
+  // propio preloader: ese texto por defecto es "Cargando tu invitación..." y de
+  // ahí saldrían unas iniciales sin sentido ("CTI"). Los nombres viven en el
+  // módulo header, así que se le pasan aparte.
+  const headerModule = config.modules.find((m) => m.type === "header") as
+    | { names?: string }
+    | undefined;
+
   return (
     <main style={themeStyle} className="min-h-screen">
       <ConditionalPreloader
         tier={tier}
         invitationId={invitationId}
         preloaderConfig={preloaderModule}
+        eventNames={headerModule?.names}
       >
         {config.modules.map((m) => (
           <div key={m.id} style={moduleWrapperStyle(m)}>

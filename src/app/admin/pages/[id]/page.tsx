@@ -283,8 +283,8 @@ export default function AdminPageEdit() {
             </select>
           </div>
         </div>
-        <div className="flex-1 overflow-auto p-4 bg-ink/5">
-          <EditorCanvas config={config} selectedId={selectedModuleId} />
+        <div className="flex-1 overflow-hidden p-4 bg-ink/5">
+          <EditorCanvas config={config} selectedId={selectedModuleId} device="mobile" />
         </div>
       </main>
 

@@ -23,6 +23,8 @@ interface ConditionalPreloaderProps {
   tier: "free" | "premium";
   invitationId: string;
   children: React.ReactNode;
+  /** Nombres del evento ("Ana & Luis"), para el monograma del preloader. */
+  eventNames?: string;
   preloaderConfig?: {
     imageUrl?: string;
     animation?: string;
@@ -41,6 +43,7 @@ export function ConditionalPreloader({
   tier,
   invitationId,
   children,
+  eventNames,
   preloaderConfig,
 }: ConditionalPreloaderProps) {
   const [showContent, setShowContent] = useState(tier === "premium");
@@ -89,7 +92,14 @@ export function ConditionalPreloader({
         <img src="/logo-invify.png" alt="Invify" className="mx-auto mb-2 h-10 w-auto object-contain" />
 
         <div className="flex justify-center">
-          <LoaderAnimation animation={animation} />
+          {/* El texto del preloader manda (ahí el autor pone lo que quiere ver al
+              abrir), y los nombres del header son el respaldo cuando ese texto es
+              una frase y no un monograma. */}
+          <LoaderAnimation
+            animation={animation}
+            text={preloaderConfig?.text}
+            fallbackText={eventNames}
+          />
         </div>
 
         <p className="text-lg text-ink/70 mt-2">

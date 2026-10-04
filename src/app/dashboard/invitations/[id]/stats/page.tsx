@@ -3,9 +3,9 @@
 // ============================================================================
 // ESTADÍSTICAS - Dashboard de la invitación para el cliente.
 // Aperturas, total de invitados (suma pax), quiz, tabla de asistencia,
-// compartir WhatsApp/email, exportar PDF (impresión) y reinicio de datos.
+// compartir WhatsApp/email, exportar CSV e imprimir, y reinicio de datos.
 // ============================================================================
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
@@ -15,16 +15,14 @@ import {
   getDoc,
   collection,
   getDocs,
-  deleteDoc,
   writeBatch,
   updateDoc,
   onSnapshot,
-  query,
-  orderBy,
 } from "firebase/firestore";
 import type { Invitation, Rsvp, QuizResponse, QuizModule } from "@/lib/types";
 import { getInvitationFeatures } from "@/lib/plans";
 import { invitationUrlRuntime } from "@/lib/seo";
+import { descargarCSV, nombreArchivoSeguro } from "@/lib/csv";
 import { ShareMenu } from "@/components/invitation/ShareMenu";
 
 export default function StatsPage() {
@@ -35,6 +33,7 @@ export default function StatsPage() {
   const [rsvps, setRsvps] = useState<Rsvp[]>([]);
   const [quizzes, setQuizzes] = useState<QuizResponse[]>([]);
   const [resetting, setResetting] = useState(false);
+  const [filtro, setFiltro] = useState("");
 
   // Realtime: suscripción en vivo a invitación + rsvps + quiz (websocket Firestore)
   useEffect(() => {
@@ -106,36 +105,95 @@ export default function StatsPage() {
     setResetting(false);
   }
 
-  if (!inv && !denied) return <p className="text-ink/60">Cargando…</p>;
-  if (denied || !inv) {
-    return (
-      <div className="card p-10 text-center max-w-lg mx-auto">
-        <h1 className="section-title mt-4">Sin acceso</h1>
-        <p className="text-ink/60 mt-2">Esta invitación no existe o no es tuya.</p>
-        <Link href="/dashboard" className="btn-primary mt-6 inline-block">
-          Volver
-        </Link>
-      </div>
-    );
+// ---- Derivados -------------------------------------------------------------
+// Todo lo que usa hooks va ANTES de los return tempranos de abajo: un useMemo
+// despues de un return condicional se ejecuta en un orden distinto en cada
+// render y React revienta con "Rendered more hooks than during the previous
+// render" en cuanto la invitación tarda un poco en llegar.
+
+const quizModule = ((inv?.builderConfig?.modules ?? []).find((m) => m.type === "quiz") as
+  | QuizModule
+  | undefined);
+
+/**
+ * Las respuestas se guardan indexadas por el id de la pregunta ("q1"), no por
+ * su texto: es lo que evita duplicar la pregunta en cada respuesta. Al
+ * mostrarlas hay que traducir el id con la pregunta del modulo, o el cliente
+ * lee "q1: Universidad" sin entender a que corresponde.
+ */
+const textoDePregunta = useMemo(() => {
+  const mapa = new Map<string, string>();
+  for (const q of quizModule?.questions ?? []) mapa.set(q.id, q.question);
+  return (id: string) => mapa.get(id) ?? id;
+}, [quizModule]);
+
+// Filtro de la lista de invitados: con 200 confirmaciones hay que poder
+// encontrar a una persona concreta sin recorrer la tabla a ojo.
+const rsvpsFiltrados = useMemo(() => {
+  const q = filtro.trim().toLowerCase();
+  if (!q) return rsvps;
+  return rsvps.filter((r) =>
+    [r.nombre, r.email, String(r.personas)].some((v) => v?.toLowerCase().includes(q))
+  );
+}, [rsvps, filtro]);
+
+if (!inv && !denied) return <p className="text-ink/60">Cargando…</p>;
+if (denied || !inv) {
+  return (
+    <div className="card p-10 text-center max-w-lg mx-auto">
+      <h1 className="section-title mt-4">Sin acceso</h1>
+      <p className="text-ink/60 mt-2">Esta invitación no existe o no es tuya.</p>
+      <Link href="/dashboard" className="btn-primary mt-6 inline-block">
+        Volver
+      </Link>
+    </div>
+  );
+}
+
+const features = getInvitationFeatures(inv);
+const totalViews = inv.stats?.views ?? 0;
+const uniqueViews = inv.stats?.uniqueViews ?? 0;
+const totalPax = features.rsvp ? rsvps.reduce((s, r) => s + r.personas, 0) : 0;
+const quizzesDone = features.quiz ? quizzes.length : 0;
+
+// Conteo por pregunta: opción → votos (las claves de datos son los ids).
+const quizTally = (quizModule?.questions ?? []).map((q) => {
+  const counts = new Map<string, number>();
+  for (const sub of quizzes) {
+    const ans = sub.datos?.[q.id];
+    if (typeof ans === "string" && ans) counts.set(ans, (counts.get(ans) ?? 0) + 1);
   }
+  const total = [...counts.values()].reduce((s, n) => s + n, 0);
+  return { question: q, counts, total };
+});
 
-  const features = getInvitationFeatures(inv);
-  const totalViews = inv.stats?.views ?? 0;
-  const uniqueViews = inv.stats?.uniqueViews ?? 0;
-  const totalPax = features.rsvp ? rsvps.reduce((s, r) => s + r.personas, 0) : 0;
-  const quizzesDone = features.quiz ? quizzes.length : 0;
+const baseArchivo = nombreArchivoSeguro(`${inv.title}-invitados`);
 
-  // Conteo por pregunta: opción → votos (las claves de datos son los ids).
-  const quizModule = ((inv.builderConfig?.modules ?? []).find((m) => m.type === "quiz") as QuizModule | undefined);
-  const quizTally = (quizModule?.questions ?? []).map((q) => {
-    const counts = new Map<string, number>();
-    for (const sub of quizzes) {
-      const ans = sub.datos?.[q.id];
-      if (typeof ans === "string" && ans) counts.set(ans, (counts.get(ans) ?? 0) + 1);
-    }
-    const total = [...counts.values()].reduce((s, n) => s + n, 0);
-    return { question: q, counts, total };
-  });
+// Se declaran como constantes y no como `function`: una declaracion de funcion
+// se izga, asi que TypeScript no le aplica el estrechamiento de `inv` que hacen
+// los return tempranos de arriba, y `inv.title` deja de narrowing.
+const exportarRsvp = () => {
+  descargarCSV(baseArchivo, [
+    ["Nombre", "Email", "Personas", "Fecha"],
+    ...rsvps.map((r) => [
+      r.nombre,
+      r.email,
+      r.personas,
+      new Date(r.fecha).toLocaleString("es"),
+    ]),
+  ]);
+};
+
+const exportarQuiz = () => {
+  const preguntas = quizModule?.questions ?? [];
+  descargarCSV(nombreArchivoSeguro(`${inv.title}-quiz`), [
+    ["Fecha", ...preguntas.map((q) => q.question)],
+    ...quizzes.map((r) => [
+      new Date(r.fecha).toLocaleString("es"),
+      ...preguntas.map((q) => r.datos?.[q.id] ?? ""),
+    ]),
+  ]);
+};
 
   if (!features.stats) {
     return (
@@ -175,7 +233,7 @@ export default function StatsPage() {
         <div className="flex flex-wrap gap-2 items-center">
           <ShareMenu slug={inv.slug} title={inv.title} variant="inline" />
           <button onClick={() => window.print()} className="btn-outline text-sm px-3 py-2">
-            Exportar PDF
+            Imprimir
           </button>
           <button onClick={resetData} disabled={resetting} className="btn-outline text-sm px-3 py-2 text-red-600">
             Reiniciar
@@ -198,40 +256,68 @@ export default function StatsPage() {
       {/* Tabla de asistencia - solo Pro/Premium (features.rsvp) */}
       {features.rsvp ? (
         <section className="card p-6 mb-8">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h2 className="font-serif text-xl text-ink">📋 Lista de invitados (RSVP)</h2>
-            <button onClick={() => window.print()} className="btn-outline text-sm px-3 py-1.5">
-              🖨️ Imprimir lista
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={exportarRsvp}
+                disabled={rsvps.length === 0}
+                className="btn-outline text-sm px-3 py-1.5 disabled:opacity-50"
+                title="Descargar la lista completa en CSV para abrirla en Excel"
+              >
+                ⬇️ CSV
+              </button>
+              <button onClick={() => window.print()} className="btn-outline text-sm px-3 py-1.5">
+                🖨️ Imprimir lista
+              </button>
+            </div>
           </div>
-          <p className="text-xs text-ink/50 mb-4">Total pax: {totalPax} · Confirmaciones: {rsvps.length}</p>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-ink/60 border-b border-ink/10">
-                <th className="py-2">Nombre</th>
-                <th>Email</th>
-                <th>Personas</th>
-                <th>Fecha</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rsvps.map((r, i) => (
-                <tr key={i} className="border-b border-ink/5">
-                  <td className="py-2">{r.nombre}</td>
-                  <td>{r.email}</td>
-                  <td>{r.personas}</td>
-                  <td>{new Date(r.fecha).toLocaleDateString()}</td>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <p className="text-xs text-ink/50">
+              Total pax: {totalPax} · Confirmaciones: {rsvps.length}
+              {rsvpsFiltrados.length !== rsvps.length && ` · filtrando ${rsvpsFiltrados.length}`}
+            </p>
+            {rsvps.length > 8 && (
+              <input
+                value={filtro}
+                onChange={(e) => setFiltro(e.target.value)}
+                placeholder="Buscar por nombre o email…"
+                className="input text-sm py-1.5 max-w-xs"
+                aria-label="Buscar en la lista de invitados"
+              />
+            )}
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-ink/60 border-b border-ink/10">
+                  <th className="py-2">Nombre</th>
+                  <th>Email</th>
+                  <th>Personas</th>
+                  <th>Fecha</th>
                 </tr>
-              ))}
-              {rsvps.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="py-4 text-ink/50 text-center">
-                    Aún no hay confirmaciones.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {rsvpsFiltrados.map((r, i) => (
+                  <tr key={i} className="border-b border-ink/5">
+                    <td className="py-2">{r.nombre}</td>
+                    <td>{r.email || "—"}</td>
+                    <td>{r.personas}</td>
+                    <td>{new Date(r.fecha).toLocaleDateString("es")}</td>
+                  </tr>
+                ))}
+                {rsvpsFiltrados.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="py-4 text-ink/50 text-center">
+                      {rsvps.length === 0 ? "Aún no hay confirmaciones." : "Sin coincidencias."}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </section>
       ) : (
         <section className="card p-6 mb-8 border-dashed border-ink/20 bg-ink/5">
@@ -244,11 +330,21 @@ export default function StatsPage() {
       {/* Respuestas de quiz - solo Pro/Premium (features.quiz) */}
       {features.quiz ? (
         <section className="card p-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h2 className="font-serif text-xl text-ink">❓ Resultados del Quiz</h2>
-            <button onClick={() => window.print()} className="btn-outline text-sm px-3 py-1.5">
-              🖨️ Imprimir resultados
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={exportarQuiz}
+                disabled={quizzes.length === 0}
+                className="btn-outline text-sm px-3 py-1.5 disabled:opacity-50"
+                title="Descargar las respuestas en CSV, con una columna por pregunta"
+              >
+                ⬇️ CSV
+              </button>
+              <button onClick={() => window.print()} className="btn-outline text-sm px-3 py-1.5">
+                🖨️ Imprimir resultados
+              </button>
+            </div>
           </div>
 
           {/* Resumen por pregunta */}
@@ -278,15 +374,17 @@ export default function StatsPage() {
             </div>
           )}
 
-          <h3 className="font-medium text-ink/70 text-sm mb-3">Respuestas individuales</h3>
+          <h3 className="font-medium text-ink/70 text-sm mb-3">
+            Respuestas individuales ({quizzes.length})
+          </h3>
           <div className="space-y-4">
             {quizzes.map((q, i) => (
               <div key={i} className="border-b border-ink/5 pb-3">
-                <p className="text-xs text-ink/50">{new Date(q.fecha).toLocaleString()}</p>
-                <ul className="text-sm mt-1">
+                <p className="text-xs text-ink/50">{new Date(q.fecha).toLocaleString("es")}</p>
+                <ul className="text-sm mt-1 space-y-0.5">
                   {Object.entries(q.datos).map(([k, v]) => (
                     <li key={k}>
-                      <span className="text-ink/60">{k}:</span> {v}
+                      <span className="text-ink/60">{textoDePregunta(k)}:</span> {v}
                     </li>
                   ))}
                 </ul>

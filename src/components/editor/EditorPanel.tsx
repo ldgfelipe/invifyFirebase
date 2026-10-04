@@ -45,7 +45,14 @@ export function EditorPanel({ module, config, onUpdate, onRemove, theme, onTheme
 
       {/* Campos específicos por tipo */}
       <div className="space-y-4">
-        {renderModuleFields(module, onUpdate, config.theme?.primaryColor)}
+        {renderModuleFields(
+          module,
+          onUpdate,
+          config.theme?.primaryColor,
+          // Las iniciales del monograma vienen del header, igual que en la
+          // invitación real: si no, saldría una frase hecha iniciales.
+          (config.modules.find((x) => x.type === "header") as { names?: string } | undefined)?.names
+        )}
       </div>
 
       {/* Estilo del módulo (nuevo: cambios drásticos) */}
@@ -159,10 +166,14 @@ function LoaderAnimationPicker({
   value,
   onChange,
   primaryColor,
+  text,
+  fallbackText,
 }: {
   value: unknown;
   onChange: (v: LoaderAnimationSetting) => void;
   primaryColor?: string;
+  text?: string;
+  fallbackText?: string;
 }) {
   const current = normalizeLoaderAnimation(value);
   // "random" no se puede previsualizar en concreto: se enseña la primera como
@@ -202,7 +213,7 @@ function LoaderAnimationPicker({
               : undefined
           }
         >
-          <LoaderAnimation animation={preview} />
+          <LoaderAnimation animation={preview} text={text} fallbackText={fallbackText} />
         </div>
       </div>
     </div>
@@ -212,7 +223,9 @@ function LoaderAnimationPicker({
 function renderModuleFields(
   module: InvitationModule,
   onUpdate: (updates: Partial<InvitationModule>) => void,
-  primaryColor?: string
+  primaryColor?: string,
+  /** Nombres del módulo header, respaldo si el texto no sirve como monograma. */
+  eventNames?: string
 ) {
   const m = module as any;
 
@@ -234,6 +247,8 @@ function renderModuleFields(
             value={m.animation}
             onChange={(animation) => onUpdate({ animation })}
             primaryColor={primaryColor}
+            text={m.text}
+            fallbackText={eventNames}
           />
           <ImageField label="Imagen" value={m.imageUrl} onChange={(v) => onUpdate({ imageUrl: v })} />
           <Field label="Texto" value={m.text} onChange={(v) => onUpdate({ text: v })} />

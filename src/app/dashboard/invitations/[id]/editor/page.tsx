@@ -12,6 +12,7 @@ import { saveInvitationContent, ExhaustedError } from "@/lib/invitationSave";
 import { ChangeRequestModal } from "@/components/dashboard/ChangeRequestModal";
 import { EditorSidebar } from "@/components/editor/EditorSidebar";
 import { EditorCanvas } from "@/components/editor/EditorCanvas";
+import type { DeviceMode } from "@/components/editor/DevicePreviewFrame";
 import { EditorPanel } from "@/components/editor/EditorPanel";
 import { AIAssistant } from "@/components/editor/AIAssistant";
 import { cn } from "@/lib/cn";
@@ -30,6 +31,9 @@ export default function InvitationEditorPage() {
   const [loading, setLoading] = useState(true);
   const [requestOpen, setRequestOpen] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
+  // Dispositivo del que se hace la vista previa. Antes eran dos checkboxes fijos
+  // con `disabled`, o sea un toggle decorativo que no cambiaba nada.
+  const [device, setDevice] = useState<DeviceMode>("mobile");
 
   useEffect(() => {
     if (!user || !id) return;
@@ -194,19 +198,37 @@ export default function InvitationEditorPage() {
 
       {/* Canvas - preview en vivo */}
       <main className="flex-1 flex flex-col overflow-hidden">
-        <div className="p-4 border-b border-ink/10 bg-white flex items-center justify-between">
+        <div className="p-4 border-b border-ink/10 bg-white flex items-center justify-between gap-3">
           <h2 className="font-serif text-lg text-ink">Vista previa</h2>
-          <div className="flex gap-2">
-            <label className="flex items-center gap-2 text-sm text-ink/70">
-              <input type="checkbox" checked={true} disabled /> Móvil
-            </label>
-            <label className="flex items-center gap-2 text-sm text-ink/70">
-              <input type="checkbox" checked={true} disabled /> Escritorio
-            </label>
+          <div
+            className="flex items-center gap-1 rounded-full border border-ink/10 bg-ink/5 p-1"
+            role="group"
+            aria-label="Dispositivo de la vista previa"
+          >
+            {(
+              [
+                { id: "mobile", label: "Móvil" },
+                { id: "desktop", label: "Escritorio" },
+              ] as const
+            ).map((d) => (
+              <button
+                key={d.id}
+                onClick={() => setDevice(d.id)}
+                aria-pressed={device === d.id}
+                className={cn(
+                  "px-3 py-1 text-xs rounded-full transition",
+                  device === d.id
+                    ? "bg-white text-ink shadow-sm font-medium"
+                    : "text-ink/60 hover:text-ink"
+                )}
+              >
+                {d.label}
+              </button>
+            ))}
           </div>
         </div>
-        <div className="flex-1 overflow-auto p-4 bg-ink/5">
-          <EditorCanvas config={config} selectedId={selectedModuleId} />
+        <div className="flex-1 overflow-hidden p-4 bg-ink/5">
+          <EditorCanvas config={config} selectedId={selectedModuleId} device={device} />
         </div>
       </main>
 
