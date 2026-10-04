@@ -137,3 +137,71 @@ vuelve a `firebase deploy --only hosting`. Para pruebas locales:
 - `npm run dev` · `npm run build` · `npm run lint` · `npm run typecheck`
 - `npm run seed` para poblar `/plans` (Stripe TEST), `/templates/demo-boda` y `/site/config`
 - `npm run emulators` para probar Auth/Firestore/Storage localmente.
+
+### Imágenes de las plantillas
+
+Las 31 plantillas se sembraron con URLs de `loremflickr.com`, que ya no sirve
+fotos: responde `401 "Bot check / Javascript is needed"` a cualquier petición sin
+navegador. No es hotlink ni una cabecera que se pueda ajustar, es un challenge de
+JavaScript, así que el navegador no las carga y ningún script puede bajarlas.
+
+Lo que sí se pudo recuperar, porque los nombres cacheados de loremflickr llevan el
+id y el secret de Flickr (`8643_16339941182_3b2d363066_h_...` →
+`live.staticflickr.com/8643/16339941182_3b2d363066_h.jpg`):
+
+- **104 referencias**: la foto original, tal cual la eligió el seed.
+- **32 referencias**: Apuntaban a `/{w}/{h}/{pool}?lock=N`, un endpoint
+  *aleatorio* que devolvía una foto distinta en cada visita, así que no había
+  ninguna foto concreta que recuperar. Se sustituyeron por una foto temática
+  del feed público de Flickr según la categoría.
+- **Las 138** (incluidas 2 del hero de `/site/config`) quedan en Firebase Storage
+  como WebP: 1000 px la miniatura del catálogo, 1600 px el fondo, 2000 px el
+  hero, en `<coleccion>/<id>/<hash>.webp`. El nombre es el hash de los bytes,
+  así que repetir el script no duplica archivos.
+
+```bash
+node scripts/migrate-template-images.cjs               # dry-run: solo reporte
+node scripts/migrate-template-images.cjs --apply       # escribe
+node scripts/migrate-template-images.cjs --verify       # las URLs responden 200
+node scripts/migrate-template-images.cjs --restore-legacy
+```
+
+El dry-run no sube nada ni escribe en Firestore. `--apply` deja las URLs
+originales en `legacyImageUrls` de cada documento y guarda un volcado completo en
+`scripts/backup-imagenes-plantillas.json` la primera vez (no lo sobrescribe en
+corridas posteriores, porque en cuanto el script vuelve a correr dejaría de ser un
+respaldo). Las 65 URLs de nivel superior que se procesaron antes de que el
+volcado quedara bien están también a mano y validadas en
+`scripts/imagenes-originales.json`; `--restore-legacy` las vuelve a cargar y
+comprueba cada una contra Flickr antes de escribir.
+
+`/api/thumb/<id>` **sigue en pie**: ahora es el placeholder, no la foto. Se usa
+para las plantillas que genera la IA, las invitaciones sin foto y el banco de
+ imágenes del editor.
+
+### Entitlements de los planes
+
+Cada invitación guarda una **copia** de las features del plan en el momento de
+comprarlo (`inv.features`), y `getInvitationFeatures` la prefiere sobre el
+`planId`. Es deliberado —así la invitación conserva lo que se pagó—, pero
+significa que cambiar el plan de la cuenta no desbloquea nada en las
+invitaciones ya creadas.
+
+Por eso el plan se cambia desde **Admin › Usuarios › Plan**, que llama a
+`/api/admin/user-plan` y reescribe también esos snapshots. El motivo es
+obligatorio y queda en el log como `admin.plan_changed`.
+
+Bajar de plan **oculta** RSVP/quiz/música, pero **no borra** los datos ya
+recogidos: las confirmaciones y respuestas que ya llegaron siguen guardadas.
+Perder los datos de los invitados por un cambio de plan sería inaceptable.
+
+```bash
+node scripts/fix-plan-entitlements.cjs            # dry-run
+node scripts/fix-plan-entitlements.cjs --apply    # escribe el bloque entitlement
+```
+
+Este script es necesario porque los ids de `/plans` los genera Stripe y ninguno
+coincide con las claves de `PLAN_CATALOG`, así que sin un `entitlement` explícito
+en el documento todos los planes caen al fallback permisivo (ilimitadas y todas
+las features) y_resultaban iguales entre sí. Clasifica cada plan por su **nombre**
+—los ids no sirven— y **no toca** un plan cuyo nombre no reconoce.
