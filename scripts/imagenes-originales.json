@@ -1,0 +1,150 @@
+{
+  "_nota": [
+    "URLs ORIGINALES de las 65 referencias de nivel superior de /templates y /demoTemplates.",
+    "Se guardan aparte porque la migracion se ejecuto en dos tandas y el backup",
+    "general (backup-imagenes-plantillas.json) se regenero tras la primera, con",
+    "las URLs ya cambiadas. Las 71 referencias anidadas si quedaron en",
+    "migrate-template-images.applied.json.",
+    "",
+    "Sirven para dos cosas: revertir, y volver a ejecutar la migracion con otros",
+    "parametros de recorte. Para las de loremflickr /cache/resized/ el id y el",
+    "secret viajan en el nombre del archivo, asi que la foto se reconstruye en",
+    "live.staticflickr.com (ver scripts/migrate-template-images.cjs).",
+    "",
+    "Uso:  node scripts/migrate-template-images.cjs --restore-legacy",
+    "El script valida cada entrada contra Flickr antes de escribir nada."
+  ],
+  "templates": {
+    "babyshower-arcoiris-pastel": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/8643_16339941182_3b2d363066_h_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/8643_16339941182_3b2d363066_h_1200_800_nofilter.jpg"
+    },
+    "babyshower-bosque-encantado": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/8123_8693479257_fa7d812fe1_b_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/8123_8693479257_e8fa8c4f76_h_1200_800_nofilter.jpg"
+    },
+    "babyshower-dulce-rosa": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/7245_7132627489_834d5baf64_c_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/7245_7132627489_e077476946_h_1200_800_nofilter.jpg"
+    },
+    "babyshower-elefantito-clasico": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/5784_21836106469_b7aa357a56_b_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/5784_21836106469_a52d16ae0e_h_1200_800_nofilter.jpg"
+    },
+    "babyshower-nubes-editorial": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/65535_52521353515_1884d9deda_b_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/65535_52521353515_09bacaf23c_h_1200_800_nofilter.jpg"
+    },
+    "babyshower-selva-moderna": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/65535_48291762746_da0c8612ab_b_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/65535_48291762746_b4ed6fc1a7_h_1200_800_nofilter.jpg"
+    },
+    "bautizo-acuarela-moderna": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/31337_54449237752_8a428ab4d4_c_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/31337_54449237752_ae2ae06b51_h_1200_800_nofilter.jpg"
+    },
+    "bautizo-angel-blanco": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/2258_2377546112_a5dfcdc3b7_c_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/2258_2377546112_e9cfd115a9_h_1200_800_nofilter.jpg"
+    },
+    "bautizo-clasico-catedral": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/63_155528228_eae523bf20_c_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/63_155528228_b4bead8327_h_1200_800_nofilter.jpg"
+    },
+    "bautizo-floral-jardin": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/31337_54449237267_ea17b72047_c_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/31337_54449237267_8bb7d0d9eb_h_1200_800_nofilter.jpg"
+    },
+    "bautizo-luz-dorada": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/31337_54450288994_22cd7f02bf_c_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/31337_54450288994_6f874bd440_h_1200_800_nofilter.jpg"
+    },
+    "bautizo-principe-azul": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/31337_54450289134_24dd5ecc5c_c_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/31337_54450289134_12ebde8041_h_1200_800_nofilter.jpg"
+    },
+    "boda-bohemia-romantica": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/753_31454548942_65803c9eef_b_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/753_31454548942_3f330d79e3_h_1200_800_nofilter.jpg"
+    },
+    "boda-destino-playa": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/5504_9434956309_ed678ab890_b_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/5504_9434956309_98f8d283db_h_1200_800_nofilter.jpg"
+    },
+    "boda-editorial-classic": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/65535_49542197097_804cf98a0f_b_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/65535_49542197097_bf5dea96e4_h_1200_800_nofilter.jpg"
+    },
+    "boda-jardin-botanico": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/276_19758256843_c8fb515c41_b_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/276_19758256843_d85af76892_h_1200_800_nofilter.jpg"
+    },
+    "boda-minimal-moderna": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/4280_35259849220_82dd2b5a64_h_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/4280_35259849220_82dd2b5a64_h_1200_800_nofilter.jpg"
+    },
+    "boda-noche-lujo": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/7503_16024478907_0d21d4aa14_h_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/7503_16024478907_b5ac5b13f9_k_1200_800_nofilter.jpg",
+      "builderConfig.theme.backgroundImage": "https://loremflickr.com/1920/1080/wedding?lock=100"
+    },
+    "corp-anual-formal": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/65535_54317861784_f7a74ea4c2_h_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/defaultImage.small_1200_800_nofilter.jpg"
+    },
+    "corp-gala-anual": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/65535_54564858599_6ec26c143d_b_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/65535_54564858599_df478079a5_h_1200_800_nofilter.jpg"
+    },
+    "corp-lanzamiento-producto": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/65535_54559892780_bb274bb8aa_h_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/65535_54559892780_bb274bb8aa_h_1200_800_nofilter.jpg"
+    },
+    "corp-networking-cocktail": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/65535_54512908049_83437d8bdd_c_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/65535_54512908049_4b16b1b927_h_1200_800_nofilter.jpg"
+    },
+    "corp-startup-pitch": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/65535_54317629626_e36b2e9ef1_k_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/65535_54317629626_e36b2e9ef1_k_1200_800_nofilter.jpg"
+    },
+    "corp-tech-summit": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/65535_54587205413_2f02e76fed_h_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/65535_54587205413_2f02e76fed_h_1200_800_nofilter.jpg"
+    },
+    "cumple-elegante-40": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/7773_18185442748_5881fac0a0_k_1200_800_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/7773_18185442748_5881fac0a0_k_1200_800_nofilter.jpg"
+    },
+    "cumple-glam-30": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/3690_9494940253_e7b97530fc_b_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/3690_9494940253_cee7b89fad_h_1200_800_nofilter.jpg"
+    },
+    "cumple-infantil-arcoiris": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/65535_51195898078_fa13eab526_b_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/65535_51195898078_1273f7dc0d_h_1200_800_nofilter.jpg"
+    },
+    "cumple-neon-urbano": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/8450_29041518716_daa9d3e6f6_c_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/8450_29041518716_95a2a9b7e0_h_1200_800_nofilter.jpg"
+    },
+    "cumple-tropical-30": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/3879_15337561092_73f993ec18_b_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/3879_15337561092_60257d90cf_h_1200_800_nofilter.jpg"
+    },
+    "cumple-vintage-50": {
+      "thumbnailUrl": "https://loremflickr.com/cache/resized/7413_10817389255_73caeda9a9_b_800_600_nofilter.jpg",
+      "previewUrl": "https://loremflickr.com/cache/resized/7413_10817389255_3bcc38b19e_h_1200_800_nofilter.jpg"
+    },
+    "demo-boda": {
+      "thumbnailUrl": "https://images.unsplash.com/photo-1519741497674-611481863552?w=800&q=80",
+      "previewUrl": "https://images.unsplash.com/photo-1519741497674-611481863552?w=1200&q=80"
+    }
+  },
+  "demoTemplates": {
+    "demo-test-y-prueba-mug5hvjz": {
+      "thumbnailUrl": "https://picsum.photos/seed/invify-cumpleanos-abstract/800/600",
+      "previewUrl": "https://picsum.photos/seed/invify-cumpleanos-abstract/1200/800"
+    }
+  }
+}

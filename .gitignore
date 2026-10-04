@@ -32,3 +32,10 @@ Thumbs.db
 .idea/
 #credencial firebase private key
 service-account.json
+
+# Migracion de imagenes de plantillas (scripts/migrate-template-images.cjs).
+# Los tres artefactos se regeneran en cada corrida y el backup deja de ser un
+# respaldo en cuanto el script vuelve a correr, asi que no se versionan.
+scripts/backup-imagenes-plantillas.json
+scripts/migrate-template-images.plan.json
+scripts/migrate-template-images.applied.json

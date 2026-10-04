@@ -4,10 +4,17 @@
 // builderConfig: fondo, color primario, tipografía y el texto real del módulo
 // header (título, subtítulo, nombres y fecha).
 //
-// Por qué no se usa una foto: las plantillas se sembraron con URLs de
-// loremflickr, que hoy responde 401 ante hotlink, así que no hay ninguna foto
-// real guardada que mostrar. Cuando el admin suba una foto por plantilla, esta
-// ruta deja de usarse (ver resolveTemplateThumb).
+// Qué es y qué no es esto: es el PLACEHOLDER, no la foto de la plantilla. Se
+// puso porque las plantillas se sembraron con URLs de loremflickr, que hoy
+// responde 401 a cualquier petición sin navegador (un challenge de JavaScript,
+// no hotlink), y el catálogo se quedaba sin imagen.
+//
+// Desde entonces las 31 plantillas tienen su foto real en Firebase Storage
+// (scripts/migrate-template-images.cjs), y resolveTemplateThumb la respeta. Esta
+// ruta sigue viva por dos motivos: es lo que pintan las plantillas creadas por
+// la IA y las invitaciones sin foto, y el editor la usa como "banco de imágenes"
+// de catálogo (/api/thumb/lock/N), donde una composición con el nombre de la
+// plantilla es más útil que un rectángulo de color.
 //
 // FORMATOS (?size=...)
 //   card (por defecto)  1000x1250  vertical 4:5. Debe coincidir con la tarjeta
@@ -18,6 +25,9 @@
 //
 // El layout es proporcional al ancho de la tarjeta, no a coordenadas fijas, así
 // que ambos formatos salen bien sin duplicar el código de dibujo.
+//
+// OJO: las redes sociales no renderizan SVG, así que como OG image esto no
+// sirve: solo es válido para el catálogo y las previsualizaciones del editor.
 //
 // NOTA: dentro de un atributo SVG el color va en hexadecimal CRUDO. Codificarlo
 // como %23 (URL) lo vuelve inválido y el navegador dibuja la figura invisible.

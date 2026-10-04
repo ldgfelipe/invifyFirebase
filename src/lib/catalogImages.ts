@@ -1,15 +1,22 @@
 // ============================================================================
 // IMÁGENES DEL CATÁLOGO - Resolución de miniaturas tolerante a datos viejos.
-// Las plantillas creadas antes de la migración guardan URLs de loremflickr,
-// que responde 401 ante hotlink y deja el catálogo (y el hero) sin imagen.
-// Aquí se detecta el host muerto y se cae a la miniatura local, que se genera
-// con los colores reales y el motivo de la categoría de cada plantilla.
+//
+// Las plantillas se sembraron con URLs de loremflickr. Ese host ya no sirve
+// fotos: responde 401 "Bot check / Javascript is needed" a cualquier petición
+// sin navegador, así que no hay forma de recalentarlo desde el navegador ni de
+// descargarlo sin más. Se recuperaron una a una y ahora están en Firebase
+// Storage (scripts/migrate-template-images.cjs).
+//
+// Este módulo sigue tratando loremflickr y picsum como hosts muertos a propósito:
+// son la red de seguridad para documentos viejos o plantillas que genere la IA
+// con URLs externas. Cuando una plantilla ya tiene foto en Storage, lo primero
+// que se cumple es que la URL es válida y se respeta tal cual.
 // ============================================================================
 
 /** Hosts que ya no sirven imágenes por hotlink. */
 const DEAD_IMAGE_HOSTS = ["loremflickr.com", "picsum.photos"];
 
-/** Versión del placeholder SVG: súbela al cambiar su diseño. */
+/** Versión del placeholder SVG: súbala al cambiar su diseño. */
 const THUMB_VERSION = "?v=4";
 
 /** Añade (o refresca) el parámetro de versión sin duplicarlo. */
@@ -26,12 +33,13 @@ export function isDeadImageUrl(url: string | undefined | null): boolean {
 
 /**
  * Miniatura de una plantilla.
- *  1. URL local /api/thumb/... (la del seed) o remota viva: se respeta.
+ *  1. URL local /api/thumb/... o remota viva (incluida una de Storage): se
+ *     respeta. Las 31 plantillas ya están en este caso.
  *  2. /api/thumb/<id>: SVG con los colores y el motivo de su categoría.
  *  3. Lock derivado del id, si tampoco se puede leer la plantilla.
  *
- * `?v=2` versiona la URL para que el CDN no siga sirviendo el SVG anterior
- * cuando cambia su código. Bájalo solo si cambia el diseño del placeholder.
+ * `?v=4` versiona la URL del SVG para que el CDN no siga sirviendo la versión
+ * anterior cuando cambia su código. Bájalo solo si cambia el diseño.
  */
 export function resolveTemplateThumb(templateId: string, thumbnailUrl?: string): string {
   const url = (thumbnailUrl ?? "").trim();
