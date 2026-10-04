@@ -660,7 +660,8 @@ export type LogAction =
   | "admin.user_created"
   | "admin.user_updated"
   | "admin.user_deleted"
-  | "admin.role_changed";
+  | "admin.role_changed"
+  | "admin.plan_changed";
 
 export interface LogEntry {
   id: string;

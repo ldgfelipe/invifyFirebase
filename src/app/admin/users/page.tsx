@@ -20,6 +20,7 @@ import { cn } from "@/lib/cn";
 import { formatPrice } from "@/lib/currency";
 import { isOwnerAdminEmail } from "@/lib/config";
 import InvoiceModal from "@/components/admin/InvoiceModal";
+import { formatQuota, resolvePlanEntitlements } from "@/lib/plans";
 
 const ORDER_STATUS: Record<string, { label: string; cls: string }> = {
   paid: { label: "Pagado", cls: "bg-green-100 text-green-700" },
@@ -40,6 +41,7 @@ export default function AdminUsersPage() {
   const [billingUser, setBillingUser] = useState<UserProfile | null>(null);
   const [invoiceOrder, setInvoiceOrder] = useState<Order | null>(null);
   const [savingUid, setSavingUid] = useState<string | null>(null);
+  const [planUser, setPlanUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -193,6 +195,14 @@ export default function AdminUsersPage() {
                       >
                         Facturación
                       </button>
+                      <button
+                        onClick={() => setPlanUser(u)}
+                        className="btn-outline text-sm px-3 py-1 mr-1"
+                        title="Cambiar el plan de la cuenta"
+                      >
+                        Plan
+                        {u.entitlements?.planName ? `: ${u.entitlements.planName}` : ""}
+                      </button>
                       {!isOwner && (
                         <button
                           onClick={() => changeRole(u, u.role === "admin" ? "cliente" : "admin")}
@@ -247,6 +257,44 @@ export default function AdminUsersPage() {
           order={invoiceOrder}
           user={invoiceOrder.uid ? users.find((u) => u.uid === invoiceOrder.uid) : null}
           onClose={() => setInvoiceOrder(null)}
+        />
+      )}
+
+      {planUser && (
+        <PlanModal
+          user={planUser}
+          plans={plans}
+          saving={savingUid === planUser.uid}
+          onClose={() => setPlanUser(null)}
+          onSave={async (payload) => {
+            const uidObjetivo = planUser!.uid;
+            setSavingUid(uidObjetivo);
+            try {
+              const token = await user!.getIdToken();
+              const res = await fetch("/api/admin/user-plan", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ uid: uidObjetivo, ...payload }),
+              });
+              const data = await res.json();
+              if (!res.ok) throw new Error(data.error ?? "Error al cambiar el plan");
+
+              setPlanUser(null);
+              alert(
+                `Plan cambiado a ${data.planName}.\n` +
+                  `Invitaciones actualizadas: ${data.invitacionesActualizadas}` +
+                  (data.orderId ? `\nPedido creado: ${data.orderId.slice(0, 12)}…` : "")
+              );
+              // Se recarga en vez de parchear la fila a mano: los entitlements
+              // tienen cupos, features y suscripción, y un merge parcial aquí
+              // dejaría el objeto incompleto en el estado de la página.
+              loadAll();
+            } catch (err: any) {
+              alert("Error: " + err.message);
+            } finally {
+              setSavingUid(null);
+            }
+          }}
         />
       )}
     </div>
@@ -354,6 +402,180 @@ function BillingModal({
             className="btn-primary px-4 py-2 text-sm"
           >
             {saving ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PlanModal({
+  user,
+  plans,
+  saving,
+  onClose,
+  onSave,
+}: {
+  user: UserProfile;
+  plans: Plan[];
+  saving: boolean;
+  onClose: () => void;
+  onSave: (payload: {
+    planId: string | null;
+    applyToInvitations: boolean;
+    charge: boolean;
+    reason: string;
+  }) => void;
+}) {
+  const actual = user.entitlements?.planId ?? "";
+  const [planId, setPlanId] = useState<string>(actual);
+  const [applyToInvitations, setApplyToInvitations] = useState(true);
+  const [charge, setCharge] = useState(false);
+  const [reason, setReason] = useState("");
+
+  const docDe = (id: string) => plans.find((p) => p.id === id) ?? null;
+  const destino = docDe(planId);
+  const sinPlan = planId === "";
+
+  // Lo que se va a aplicar de verdad, no lo que dice la etiqueta del plan.
+  // resolvePlanEntitlements es la misma funcion que usa la ruta del servidor, asi
+  // que lo que se ve aqui es exactamente lo que se guarda.
+  const entDestino = destino ? resolvePlanEntitlements(destino.id, destino) : null;
+  const entActual = actual ? resolvePlanEntitlements(actual, docDe(actual)) : null;
+
+  /**
+   * Un plan sin campo `entitlement` y con id que no esta en PLAN_CATALOG (los ids
+   * que crea Stripe) cae al fallback permisivo: ilimitadas y todas las features.
+   * Sin avisar, Basic y Premium serian indistinguibles y las pruebas de alcance no
+   * probarian nada, asi que se muestra como advertencia.
+   */
+  const fallbackPermisivo = Boolean(destino) && !destino!.entitlement && !entDestino?.planId.startsWith("plan_");
+
+  const bajando =
+    Boolean(actual) && Boolean(entDestino) && formatQuota(entActual?.quota as any) !== formatQuota(entDestino?.quota as any);
+
+  const listo = reason.trim().length > 0 && (actual !== planId || applyToInvitations);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="font-serif text-xl text-ink mb-1">Cambiar plan</h2>
+        <p className="text-sm text-ink/50 mb-4">{user.email}</p>
+
+        <label className="block mb-4">
+          <span className="text-xs text-ink/60">Plan de la cuenta</span>
+          <select className="input mt-1" value={planId} onChange={(e) => setPlanId(e.target.value)}>
+            <option value="">— Sin plan (gratuito) —</option>
+            {plans.map((p) => {
+              const ent = resolvePlanEntitlements(p.id, p);
+              return (
+                <option key={p.id} value={p.id}>
+                  {p.name?.trim()} · {formatQuota(ent?.quota)}{" "}
+                  {ent?.features.rsvp ? "· RSVP/Quiz/Música" : "· sin RSVP"}
+                </option>
+              );
+            })}
+          </select>
+        </label>
+
+        {destino && (
+          <div className="text-xs text-ink/60 mb-4 space-y-1">
+            <div>
+              Precio de referencia: {formatPrice(destino.price ?? 0, (destino.currency as any) || "mxn")}
+            </div>
+            <div>Cupo que se aplicará: {formatQuota(entDestino?.quota)} invitaciones</div>
+            <div className="flex flex-wrap gap-1.5">
+              {(["rsvp", "quiz", "audio", "stats", "allTemplates"] as const).map((f) => (
+                <span
+                  key={f}
+                  className={cn(
+                    "px-1.5 py-0.5 rounded",
+                    entDestino?.features[f]
+                      ? "bg-green-100 text-green-700"
+                      : "bg-ink/10 text-ink/40"
+                  )}
+                >
+                  {f === "allTemplates" ? "todo el catálogo" : f === "audio" ? "música" : f}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {fallbackPermisivo && (
+          <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 mb-3">
+            ⚠️ Este plan no tiene campo <code>entitlement</code> y su id no está en el catálogo, así que
+            se le aplican <strong>todas las capacidades</strong> (cupo ilimitado, RSVP, quiz, música y
+            todo el catálogo). Por eso ahora <strong>Básico y Premium se comportan igual</strong>. Para que
+            las pruebas de alcance sirvan, define <code>entitlement</code> en{" "}
+            <a href="/admin/plans" className="underline">Admin › Planes</a>.
+          </div>
+        )}
+
+        <label className="flex items-start gap-2 mb-3">
+          <input
+            type="checkbox"
+            checked={applyToInvitations}
+            onChange={(e) => setApplyToInvitations(e.target.checked)}
+            className="mt-1"
+          />
+          <span className="text-sm text-ink/70">
+            Aplicar también a las invitaciones ya creadas
+            <span className="block text-xs text-ink/50">
+              Cada invitación guarda una copia de las features del plan. Sin esto, cambiar el plan de
+              la cuenta no desbloquea nada en las invitaciones que ya existen.
+            </span>
+          </span>
+        </label>
+
+        <label className="flex items-start gap-2 mb-3">
+          <input
+            type="checkbox"
+            checked={charge}
+            disabled={sinPlan}
+            onChange={(e) => setCharge(e.target.checked)}
+            className="mt-1"
+          />
+          <span className="text-sm text-ink/70">
+            Registrar como cobro
+            <span className="block text-xs text-ink/50">
+              Crea un pedido pagado para que la venta aparezca en el panel de ventas y en el total
+              gastado del usuario. Si es una prueba o una cortesía, déjalo apagado.
+            </span>
+          </span>
+        </label>
+
+        {bajando && (
+          <div className="text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 mb-3">
+            ⚠️ Estás bajando de plan. Las capacidades que no incluya el plan nuevo dejarán de
+            mostrarse en las invitaciones (RSVP, quiz o música). Los datos ya recogidos —las
+            confirmaciones y respuestas— <strong>no se borran</strong>.
+          </div>
+        )}
+
+        <label className="block mb-4">
+          <span className="text-xs text-ink/60">Motivo (obligatorio, queda en el log de auditoría)</span>
+          <input
+            className="input mt-1"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Prueba del plan Pro, cortesía, corrección de cobro…"
+          />
+        </label>
+
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="btn-outline px-4 py-2 text-sm">
+            Cancelar
+          </button>
+          <button
+            onClick={() => onSave({ planId: sinPlan ? null : planId, applyToInvitations, charge, reason })}
+            disabled={saving || !listo}
+            className="btn-primary px-4 py-2 text-sm disabled:opacity-50"
+          >
+            {saving ? "Aplicando…" : "Aplicar cambio"}
           </button>
         </div>
       </div>

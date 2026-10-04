@@ -105,6 +105,19 @@ export function getPlanFeatures(planId?: string | null): PlanFeatures {
 /**
  * Entitlements efectivos de un plan combinando el catálogo con el doc de
  * /plans/{id} (permite overrides desde admin). `planData.entitlement` es parcial.
+ *
+ * Ojo con el plan que no está en PLAN_CATALOG: los ids de /plans los genera
+ * Stripe, así que casi ninguno coincide con las claves del catálogo y este caso
+ * es el normal, no la excepción. Antes, al no encontrarlo, se caía a un fallback
+ * permisivo con TODAS las features, y al aplicar encima un `entitlement`
+ * parcial las que no se mencionaran seguían en true. Consecuencia real: un
+ * cliente que pagó "Basico" (sin `entitlement`) recibia ilimitadas, RSVP, quiz y
+ * todo el catálogo, igual que Premium.
+ *
+ * Ahora, si el documento trae `entitlement`, ese documento ES la definición: las
+ * features de partida son las de plan gratuito, no las de plan completo. Si no lo
+ * trae, se mantiene el fallback permisivo para no romper planes custom que se
+ * crean sin definir nada.
  */
 export function resolvePlanEntitlements(
   planId?: string | null,
@@ -114,8 +127,18 @@ export function resolvePlanEntitlements(
     entitlement?: Partial<PlanEntitlements>;
   } | null
 ): PlanEntitlements | null {
-  const base = getPlanEntitlements(planId);
-  if (!base) return null;
+  if (!planId) return null;
+
+  const cat = PLAN_CATALOG[planId];
+  const defineElDoc = Boolean(planData?.entitlement?.features);
+  const base: PlanEntitlements = cat ?? {
+    planId,
+    planName: planId,
+    quota: "unlimited",
+    interval: "one_time",
+    features: defineElDoc ? { ...FREE_FEATURES } : { ...ALL_FEATURES },
+  };
+
   if (!planData) return base;
   return {
     planId: base.planId,
@@ -268,4 +291,63 @@ export function formatQuota(quota: number | "unlimited" | undefined): string {
   if (quota === "unlimited") return "Ilimitadas";
   if (!quota) return "0";
   return `${quota}`;
+}
+
+/**
+ * REEMPLAZA los entitlements de una cuenta con los de un plan.
+ *
+ * Es el contrapunto de mergeEntitlements, que solo une y por diseño nunca quita
+ * nada (un cliente que pagó Pro y compra Premium no pierde lo que ya tenía). Un
+ * cambio de plan desde admin es otra cosa: es una corrección o una prueba, y si
+ * no bisa las capacidades el selector de plan no serviría para nada.
+ *
+ * Se conservan los datos que no vienen del plan:
+ *   - allowedTemplateIds: si el plan abre todo el catálogo pasa a "all"; si no,
+ *     se conservan las plantillas ya compradas, porque no son una capacidad del
+ *     plan sino un pago anterior.
+ *   - subscriptionExpiresAt: se mantiene para no extender la suscripción de
+ *     forma accidental al cambiar de plan.
+ */
+export function replaceEntitlements(params: {
+  current?: UserEntitlements | null;
+  plan: PlanEntitlements;
+  /** Plantillas ya compradas, si el admin las quiere conservar. */
+  preserveTemplateIds?: string[] | null;
+}): UserEntitlements {
+  const { current, plan, preserveTemplateIds } = params;
+
+  const compradas = Array.isArray(preserveTemplateIds)
+    ? preserveTemplateIds
+    : Array.isArray(current?.allowedTemplateIds)
+      ? current!.allowedTemplateIds
+      : [];
+
+  const allowedTemplateIds: string[] | "all" = plan.features.allTemplates
+    ? "all"
+    : Array.from(new Set(compradas));
+
+  return {
+    planId: plan.planId,
+    planName: plan.planName,
+    quota: plan.quota,
+    features: { ...plan.features },
+    interval: plan.interval,
+    allowedTemplateIds,
+    ...(plan.interval !== "one_time" || current?.subscriptionActive
+      ? {
+          subscriptionActive: true,
+          // Sin valor previo se da un mes: si el admin sube a Premium para
+          // probar y no se define la fecha, la cuenta quedaria "suscrita" para
+          // siempre sin que nadie lo haya decidido.
+          subscriptionExpiresAt:
+            current?.subscriptionExpiresAt ?? Date.now() + 30 * 24 * 60 * 60 * 1000,
+        }
+      : {}),
+    updatedAt: Date.now(),
+  };
+}
+
+/** Features efectivas de una invitación tras un cambio de plan de la cuenta. */
+export function featuresDePlan(planId?: string | null): PlanFeatures {
+  return getPlanFeatures(planId);
 }
