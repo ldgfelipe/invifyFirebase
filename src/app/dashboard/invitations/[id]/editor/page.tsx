@@ -15,6 +15,7 @@ import { EditorCanvas } from "@/components/editor/EditorCanvas";
 import type { DeviceMode } from "@/components/editor/DevicePreviewFrame";
 import { EditorPanel } from "@/components/editor/EditorPanel";
 import { AIAssistant } from "@/components/editor/AIAssistant";
+import { SupportButton } from "@/components/editor/SupportButton";
 import { cn } from "@/lib/cn";
 
 export default function InvitationEditorPage() {
@@ -154,6 +155,12 @@ export default function InvitationEditorPage() {
     <div className="h-screen flex bg-ink/5">
         {/* AI Assistant (floating) */}
         <AIAssistant config={config} setConfig={setConfig} invitationId={id} />
+        {/* Soporte, justo encima del botón de IA (bottom-24 vs bottom-6). */}
+        <SupportButton
+          invitationId={id as string}
+          invitationTitle={invitation?.title}
+          selectedModule={selectedModule?.type}
+        />
       {/* Sidebar - lista de módulos */}
       <aside className="w-64 bg-white border-r border-ink/10 flex flex-col">
         <div className="p-4 border-b border-ink/10">
