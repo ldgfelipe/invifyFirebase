@@ -174,5 +174,14 @@ service cloud.firestore {
       allow create: if true;
       allow update, delete: if isAdmin();
     }
+
+    // ---- /newsletter : altas a la lista de correo ----
+    // El alta la hace POST /api/newsletter con el Admin SDK, que ignora estas
+    // reglas. Se dejan sin escritura por si acaso, para que nadie pueda meter
+    // correos falsos desde el navegador ni leer la lista.
+    match /newsletter/{emailHash} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
   }
 }
