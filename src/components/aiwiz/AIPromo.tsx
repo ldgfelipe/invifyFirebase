@@ -9,7 +9,14 @@
 import { useLanguage } from "@/lib/i18n/provider";
 import { AiWizard } from "./AiWizard";
 
-export function AIPromo() {
+export function AIPromo({
+  previewUrl,
+  previewName,
+}: {
+  /** Foto real de una plantilla. La pasa el servidor desde /templates. */
+  previewUrl?: string;
+  previewName?: string;
+}) {
   const { t, locale } = useLanguage();
   const isEn = locale === "en";
 
@@ -87,27 +94,72 @@ export function AIPromo() {
               </button>
             </div>
           </div>
-          <div className="relative hidden lg:block">
-            <div className="aspect-[4/5] rounded-2xl overflow-hidden bg-champagne shadow-lg">
-              {/* Placeholder - en producción tendría una preview generada */}
-              <div className="p-8 flex items-center justify-center text-ink/60">
-                <svg
-                  className="w-20 h-20 opacity-20"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H11a2 2 0 00-2 2v6a2 2 0 002 2zm0 0V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h2m-2-4h10a2 2 0 002-2v-6a2 2 0 00-2-2H11a2 2 0 00-2 2v14a2 2 0 002 2z"
-                  />
-                </svg>
+<div className="relative hidden lg:block">
+            {previewUrl ? (
+              <PreviewMockup src={previewUrl} name={previewName} isEn={isEn} />
+            ) : (
+              // Sin foto no se deja un hueco vacío: se cae a una composición con
+              // los colores de marca. Antes este bloque era siempre un rectángulo
+              // con un icono al 20% de opacidad, que en pantalla se leia como una
+              // imagen que no habia cargado.
+              <div className="aspect-[4/5] rounded-2xl overflow-hidden bg-gradient-to-br from-champagne via-gold-100 to-champagne shadow-lg flex items-center justify-center">
+                <div className="text-center px-8">
+                  <span className="block font-serif text-2xl text-ink/70">
+                    {isEn ? "Your invitation" : "Tu invitación"}
+                  </span>
+                  <span className="block text-sm text-ink/50 mt-2">
+                    {isEn ? "designed in seconds" : "diseñada en segundos"}
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * Móvil con la invitación dentro.
+ *
+ * Se ve mejor que una imagen plana porque el punto de la sección es justo eso:
+ * que el resultado es una invitación de móvil. La foto va con object-cover, y
+ * si el navegador no la puede cargar el degradado de fondo sigue leyéndose como
+ * una tarjeta, no como un hueco.
+ */
+function PreviewMockup({
+  src,
+  name,
+  isEn,
+}: {
+  src: string;
+  name?: string;
+  isEn: boolean;
+}) {
+  return (
+    <div className="relative">
+      <div className="absolute -inset-4 rounded-3xl bg-gold-200/20 blur-2xl" aria-hidden="true" />
+      <div className="relative mx-auto w-[280px] rounded-[2rem] bg-ink p-2 shadow-xl">
+        <div className="relative rounded-[1.7rem] overflow-hidden bg-champagne">
+          <div className="absolute left-1/2 top-2 z-10 h-5 w-16 -translate-x-1/2 rounded-full bg-ink" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={src}
+            alt={name ? (isEn ? `Example: ${name}` : `Ejemplo: ${name}`) : isEn ? "Example invitation" : "Invitación de ejemplo"}
+            className="aspect-[4/5] w-full object-cover"
+            loading="lazy"
+          />
+          {name && (
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-ink/80 to-transparent px-4 pb-4 pt-10">
+              <p className="text-white/95 font-serif text-sm truncate">{name}</p>
+            </div>
+          )}
+        </div>
+      </div>
+      <p className="mt-4 text-center text-xs text-ink/45">
+        {isEn ? "Real template from the catalog" : "Plantilla real del catálogo"}
+      </p>
+    </div>
   );
 }

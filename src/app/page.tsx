@@ -16,6 +16,15 @@ export default async function HomePage() {
   const featured = templates.slice(0, 6);
   const settings = await getSiteSettings();
 
+  // Foto de muestra para la sección del asistente de IA. Antes ese hueco era un
+  // rectángulo vacío con un icono; se toma de una plantilla real ya subida a
+  // Storage. Se elige una boda si la hay, porque es la categoría que mejor explica
+  // el producto; si no, la primera que exista.
+  const muestra =
+    templates.find((t) => t.category === "boda") ?? templates[0] ?? null;
+  const previewUrl = muestra?.thumbnailUrl || "";
+  const previewName = muestra?.name || "";
+
   return (
     <div>
       <Hero settings={settings} />
@@ -25,7 +34,7 @@ export default async function HomePage() {
       {/* INVITACIÓN CON IA */}
       <AiCta />
 
-      <AIPromo />
+      <AIPromo previewUrl={previewUrl} previewName={previewName} />
 
       <HomeCatalog templates={featured} categories={CATEGORIES} />
     </div>
