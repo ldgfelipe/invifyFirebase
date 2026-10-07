@@ -7,15 +7,17 @@
 "use client";
 
 import { useLanguage } from "@/lib/i18n/provider";
-import { AiWizard } from "./AiWizard";
 
 export function AIPromo({
   previewUrl,
   previewName,
+  onOpen,
 }: {
   /** Foto real de una plantilla. La pasa el servidor desde /templates. */
   previewUrl?: string;
   previewName?: string;
+  /** Abre el mismo wizard que el botón de arriba. */
+  onOpen: () => void;
 }) {
   const { t, locale } = useLanguage();
   const isEn = locale === "en";
@@ -71,7 +73,7 @@ export function AIPromo({
             </div>
             <div className="mt-8">
               <button
-                onClick={() => window.dispatchEvent(new Event("ai:open"))}
+                onClick={onOpen}
                 className="btn-primary px-8 py-3 text-base"
                 aria-label={isEn ? "Start creating with AI" : "Comenzar con IA"}
               >

@@ -6,8 +6,7 @@ import { getSiteSettings } from "@/lib/site";
 import { HomeCatalog } from "@/components/catalog/HomeCatalog";
 import { Hero } from "@/components/Hero";
 import { PromoBanner } from "@/components/PromoBanner";
-import { AiCta } from "@/components/aiwiz/AiCta";
-import { AIPromo } from "@/components/aiwiz/AIPromo";
+import { AiSections } from "@/components/aiwiz/AiSections";
 
 export const revalidate = 300;
 
@@ -31,10 +30,8 @@ export default async function HomePage() {
 
       <PromoBanner banner={settings.banner} page="home" />
 
-      {/* INVITACIÓN CON IA */}
-      <AiCta />
-
-      <AIPromo previewUrl={previewUrl} previewName={previewName} />
+      {/* INVITACIÓN CON IA: los dos bloques comparten un único wizard */}
+      <AiSections previewUrl={previewUrl} previewName={previewName} />
 
       <HomeCatalog templates={featured} categories={CATEGORIES} />
     </div>

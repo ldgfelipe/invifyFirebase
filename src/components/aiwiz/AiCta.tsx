@@ -4,13 +4,10 @@
 // CTA IA - Botón "Diseña tu invitación con IA" que abre el wizard (4 pasos).
 // Se monta debajo del Hero en la landing.
 // ============================================================================
-import { useState } from "react";
 import { useLanguage } from "@/lib/i18n/provider";
-import { AiWizard } from "./AiWizard";
 
-export function AiCta() {
+export function AiCta({ onOpen }: { onOpen: () => void }) {
   const { t } = useLanguage();
-  const [open, setOpen] = useState(false);
 
   return (
     <section className="px-6 pb-10">
@@ -18,7 +15,7 @@ export function AiCta() {
         <h3 className="font-serif text-3xl text-ink">{t.aiwiz.modalTitle}</h3>
         <p className="text-ink/60 mt-2 mb-6">{t.aiwiz.ctaTagline}</p>
         <button
-          onClick={() => setOpen(true)}
+          onClick={onOpen}
           className="btn-primary px-8 py-3 text-base"
         >
           <span className="inline-flex items-center gap-2">
@@ -33,7 +30,6 @@ export function AiCta() {
           </span>
         </button>
       </div>
-      <AiWizard open={open} onClose={() => setOpen(false)} />
     </section>
   );
 }
