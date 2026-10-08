@@ -8,6 +8,7 @@
 // Solo devolvemos páginas publicadas: un draft nunca debe ser accesible ni
 // indexable, aunque su slug se conozca.
 // ============================================================================
+import { unstable_cache } from "next/cache";
 import { adminDb } from "@/lib/firebase/admin";
 import { normalizePageSlug as normalizeSlug } from "@/lib/pageSlug";
 import type { Page } from "@/lib/types";
@@ -45,6 +46,21 @@ export async function getPublishedPages(): Promise<Page[]> {
     // La home se sirve desde /, no desde su propio slug.
     .filter((p) => !p.isHome && normalizeSlug(p.slug) !== "/");
 }
+
+/**
+ * Las mismas páginas, pero cacheadas entre peticiones.
+ *
+ * El pie las usa para construir sus enlaces, y el pie vive en el layout raíz:
+ * sin caché, cada ruta del sitio (incluidas las públicas de invitación y las
+ * del panel) haría una lectura completa de /pages en cada visita. Con esta
+ * envoltura la lectura se comparte y se refresca cada 5 minutos, igual que el
+ * resto del contenido cacheado del sitio.
+ */
+export const getPublishedPagesCached = unstable_cache(
+  async (): Promise<Page[]> => getPublishedPages(),
+  ["published-pages"],
+  { revalidate: 300 }
+);
 
 /**
  * Imagen para Open Graph de una página: primero la que sube el admin, si no la

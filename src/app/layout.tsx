@@ -6,6 +6,7 @@ import { LanguageProvider } from "@/lib/i18n/provider";
 import { SiteHeader } from "@/components/layout/SiteHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 import { MarketingHead, MarketingBody } from "@/components/MarketingScripts";
+import { getPublishedPagesCached } from "@/lib/pages";
 import { SITE_URL } from "@/lib/seo";
 
 // Fuentes premium (se autohospedan en build para Core Web Vitals).
@@ -56,11 +57,23 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Páginas del CMS para los enlaces del pie. Sin esto, /admin/pages puede crear
+  // y publicar páginas que no enlaza nadie: se sirven en su URL y aparecen en el
+  // sitemap, pero no hay forma de llegar a ellas desde el sitio.
+  //
+  // Va cacheada (getPublishedPagesCached) porque el pie vive en el layout raíz:
+  // sin caché, cada ruta —incluidas las invitaciones públicas y el panel— haría
+  // una lectura completa de /pages. Con un fallo de Firestore el pie se queda sin
+  // páginas, pero el resto del sitio sigue sirviendo.
+  const pages = await getPublishedPagesCached()
+    .then((list) => list.map((p) => ({ slug: p.slug, title: p.title })))
+    .catch(() => []);
+
   return (
     <html lang="es" className={`${playfair.variable} ${inter.variable}`}>
       <head>
@@ -72,7 +85,7 @@ export default function RootLayout({
           <LanguageProvider>
             <SiteHeader />
             <main className="flex-1">{children}</main>
-            <SiteFooter />
+            <SiteFooter pages={pages} />
           </LanguageProvider>
         </AuthProvider>
         <MarketingBody />
