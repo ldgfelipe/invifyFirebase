@@ -36,7 +36,15 @@ export default function AdminPagesPage() {
     try {
       const q = query(collection(db, "pages"), orderBy("createdAt", "desc"));
       const snap = await getDocs(q);
-      setPages(snap.docs.map((d) => d.data() as Page));
+      // El id del documento es la referencia canónica: los docs sembrados con
+      // seed-pages.cjs (add()) no guardan "id" en sus datos, así que sin este
+      // fallback page.id llegaba undefined y page.id.slice() rompía el render.
+      setPages(
+        snap.docs.map((d) => {
+          const data = d.data() as Page;
+          return { ...data, id: data.id ?? d.id };
+        })
+      );
     } catch (err) {
       console.error(err);
     } finally {
